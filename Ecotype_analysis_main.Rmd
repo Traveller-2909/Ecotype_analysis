@@ -54,3 +54,1695 @@ Five fish excluded:
 ## Color codes ecotypes
 "#004643" --> brackish resident,"#00BFB2" --> anadromous,"#F1C40F" --> cross-habitat,"#C5D86D" --> freshwater resident,
 "#AF3800" --> unknown
+
+```{r marry d18O data to Sr data, include=FALSE, eval=FALSE}
+#Read in LA-ICPMS and SIMS data
+rm(list = ls())
+
+LA <- read.delim("Data/Pike/Pike-LA-ICPMS-years_whole-sample_with-TL.txt", 
+                 header = T, stringsAsFactors = F, sep = "\t", dec = ".")
+
+d18O <- read.delim("Data/Pike/Pike-d18O-years_whole-sample_with-TL.txt", header = T,
+                stringsAsFactors = F, sep = "\t", dec = ".")
+
+#Clean up data & assign capture locations to main areas
+#Trace element data
+LA_clean <- LA%>%
+  filter(LA_dist>=50)%>%
+  filter(comment=="OK")%>%
+  transmute(fish_ID = fishID,
+            age=age,
+            capt = area,
+            area = case_when(area %in% "Peene" ~ "Freshwater",
+                             area %in% "Barthe" ~ "Freshwater",
+                             area %in% "NHG" ~ "Freshwater",
+                             area %in% "Sehrowbach" ~ "Freshwater",
+                             area %in% "Bandycksgraben" ~ "Freshwater",
+                             area %in% "Ziese" ~ "Freshwater",
+                             area %in% "KB" ~ "WRB",
+                             area %in% "SB" ~ "WRB",
+                             area %in% "WB" ~ "NRB",
+                             area %in% "BEG" ~ "NRB", 
+                             area %in% "KJB" ~ "NRB",
+                             area %in% "GJB" ~ "NRB",
+                             area %in% "GB" ~ "GB",
+                             area %in% "KD" ~ "control",
+                             TRUE ~ "NA"),
+            Sr = Sr,
+            Na = Na,
+            Mg = Mg,
+            Ba = Ba,
+            Mn = Mn,
+            LA_dist = LA_dist,
+            lifeyear=lifeyear)
+
+#d18O data
+d18O_clean <- d18O%>%
+  filter(comment=="OK")%>%
+  transmute(fish_ID = fishID,
+            age=age,
+            capt = area,
+            area = case_when(area %in% "Peene" ~ "Freshwater",
+                             area %in% "Barthe" ~ "Freshwater",
+                             area %in% "NHG" ~ "Freshwater",
+                             area %in% "Sehrowbach" ~ "Freshwater",
+                             area %in% "Badendycksgraben" ~ "Freshwater",
+                             area %in% "Ziese" ~ "Freshwater",
+                             area %in% "KB" ~ "WRB",
+                             area %in% "SB" ~ "WRB",
+                             area %in% "WB" ~ "NRB",
+                             area %in% "BEG" ~ "NRB", 
+                             area %in% "KJB" ~ "NRB",
+                             area %in% "GJB" ~ "NRB",
+                             area %in% "GB" ~ "GB",
+                             area %in% "KD" ~ "Control",
+                             TRUE ~ "NA"),
+            d18O = d18O,
+            sims_dist = sims_dist,
+            lifeyear=lifeyear)
+
+LA_clean <- LA_clean %>% drop_na()
+
+#Smooth trace element data to get rid of extreme values
+LA_smooth <- LA_clean%>%group_by(fish_ID)%>%
+  transmute(fish_ID=fish_ID,
+            age=age,
+            capt=capt,
+            area=area,
+            Sr=as.numeric(zoo::rollmean(Sr, k=9, fill=NA, align = "left")),
+            Na=as.numeric(zoo::rollmean(Na, k=9, fill=NA, align = "left")),
+            Mg=as.numeric(zoo::rollmean(Mg, k=9, fill=NA, align = "left")),
+            Ba=as.numeric(zoo::rollmean(Ba, k=9, fill=NA, align = "left")),
+            Mn=as.numeric(zoo::rollmean(Mn, k=9, fill=NA, align = "left")),
+            LA_dist=as.numeric(LA_dist),
+            lifeyear=lifeyear)
+
+#Order data for joining
+d18O_clean <- d18O_clean[order(d18O_clean$fish_ID),]
+LA_smooth <- LA_smooth[order(LA_smooth$fish_ID),]
+LA_smooth <- data.frame(LA_smooth)
+
+#reinterpolate Sr (higher spatial resolution) to d18O distances (lower spatial resolution) for joining
+IDOto <- unique(d18O_clean$fish_ID)
+dfE <- data.frame()
+for (i in 1:length(IDOto)) {
+  Sr <- data.frame(approx(LA_smooth[which(LA_smooth$fish_ID==IDOto[i]),"LA_dist"],
+              LA_smooth[which(LA_smooth$fish_ID==IDOto[i]),"Sr"],
+              n = length(d18O_clean[which(d18O_clean$fish_ID==IDOto[i]),"sims_dist"]),
+              rule = 1, method = "linear", ties = "ordered"))
+  Na <- data.frame(approx(LA_smooth[which(LA_smooth$fish_ID==IDOto[i]),"LA_dist"],
+              LA_smooth[which(LA_smooth$fish_ID==IDOto[i]),"Na"],
+              n = length(d18O_clean[which(d18O_clean$fish_ID==IDOto[i]),"sims_dist"]),
+              rule = 1, method = "linear", ties = "ordered"))
+  Mg <- data.frame(approx(LA_smooth[which(LA_smooth$fish_ID==IDOto[i]),"LA_dist"],
+              LA_smooth[which(LA_smooth$fish_ID==IDOto[i]),"Mg"],
+              n = length(d18O_clean[which(d18O_clean$fish_ID==IDOto[i]),"sims_dist"]),
+              rule = 1, method = "linear", ties = "ordered"))
+  Ba <- data.frame(approx(LA_smooth[which(LA_smooth$fish_ID==IDOto[i]),"LA_dist"],
+              LA_smooth[which(LA_smooth$fish_ID==IDOto[i]),"Ba"],
+              n = length(d18O_clean[which(d18O_clean$fish_ID==IDOto[i]),"sims_dist"]),
+              rule = 1, method = "linear", ties = "ordered"))
+  Mn <- data.frame(approx(LA_smooth[which(LA_smooth$fish_ID==IDOto[i]),"LA_dist"],
+              LA_smooth[which(LA_smooth$fish_ID==IDOto[i]),"Mn"],
+              n = length(d18O_clean[which(d18O_clean$fish_ID==IDOto[i]),"sims_dist"]),
+              rule = 1, method = "linear", ties = "ordered"))
+  df <- cbind(Sr=Sr[,2], Na=Na[,2], Mg=Mg[,2], Ba=Ba[,2], Mn=Mn[,2])
+  dfE <- rbind(dfE,df)
+}
+
+otoint_lowres <- cbind(d18O_clean, dfE)
+
+write.table(otoint_lowres, file = "Data/Pike/Oto_LA-to-d18O_interpolation.txt", row.names = F, sep = "\t",dec = ".")
+```
+
+```{r covariance analysis d18O vs Sr, include=FALSE, eval=FALSE}
+#read in data
+rm(list = ls())
+
+otoint_lowres <- read.delim("Data/Pike/Oto_LA-to-d18O_interpolation.txt", 
+                            header = T, stringsAsFactors = F, 
+                            dec = ".", sep = "\t")
+
+#clean up
+Oto_lowres <- otoint_lowres%>%
+  filter(fish_ID!="BH-01908"&capt!="KD")%>%
+  transmute(ID=fish_ID,
+            capt=capt,
+            area=area,
+            dist=sims_dist,
+            Sr=Sr,
+            d18O=d18O)%>%
+  drop_na()
+
+#plot high signal fish
+Testfish1 <- Oto_lowres%>%filter(ID=="BH-90946")
+Testfish2 <- Oto_lowres%>%filter(ID=="BH-91050")
+Testfish3 <- Oto_lowres%>%filter(ID=="BH-90928")
+Testfish4 <- Oto_lowres%>%filter(ID=="BH-01882")
+Testfish5 <- Oto_lowres%>%filter(ID=="BH-01868")
+Testfish6 <- Oto_lowres%>%filter(ID=="BH-01585")
+
+P1 <- ggplot(Testfish1,aes(x=Sr, y=d18O))+
+  geom_point()+
+  labs(x="Sr/Ca (ppt)", y="d18O (permill)", 
+       title="BH-90946, freshwater, likely anadromous")+
+  ylim(-11,-3)+xlim(0,0.007)+
+  theme_minimal()
+P2 <- ggplot(Testfish2,aes(x=Sr, y=d18O))+
+  geom_point()+
+  labs(x="Sr/Ca (ppt)", y="d18O (permill)",
+       title = "BH-91050, freshwater, likely anadromous")+
+  ylim(-11,-3)+xlim(0,0.007)+
+  theme_minimal()
+P3 <- ggplot(Testfish3,aes(x=Sr, y=d18O))+
+  geom_point()+
+  labs(x="Sr/Ca (ppt)", y="d18O (permill)",
+       title = "BH-90928, freshwater, likely anadromous")+
+  ylim(-11,-3)+xlim(0,0.007)+
+  theme_minimal()
+P4 <- ggplot(Testfish4,aes(x=Sr, y=d18O))+
+  geom_point()+
+  labs(x="Sr/Ca (ppt)", y="d18O (permill)",
+       title = "BH-01882, Bodden, likely resident")+
+  ylim(-11,-3)+xlim(0,0.007)+
+  theme_minimal()
+P5 <- ggplot(Testfish5,aes(x=Sr, y=d18O))+
+  geom_point()+
+  labs(x="Sr/Ca (ppt)", y="d18O (permill)",
+       title = "BH-01868, Bodden, likely resident")+
+  ylim(-11,-3)+xlim(0,0.007)+
+  theme_minimal()
+P6 <- ggplot(Testfish6,aes(x=Sr, y=d18O))+
+  geom_point()+
+  labs(x="Sr/Ca (ppt)", y="d18O (permill)",
+       title = "BH-01585, Bodden, likely resident")+
+  ylim(-11,-3)+xlim(0,0.007)+
+  theme_minimal()
+ggarrange(P1,P2,P3,P4,P5,P6)
+
+
+
+png(filename = "Figures/Correlation_d18O~Sr.png", 
+    width = 3000, height = 1800, res = 600)
+ggplot(Oto_lowres,aes(x=Sr*1000, y=d18O))+
+  geom_point(size=.5)+
+  scale_x_continuous(breaks = seq(0,8,1))+
+  scale_y_continuous(breaks = seq(-15,0,1))+
+  labs(x="Sr/Ca (mg/g)", 
+       y=expression(bold(delta^18*"O"~("VPDB \u2030"))),
+       title=expression(bold("Correlation of intraotolith Sr and"~delta^18*"O")))+
+  stat_smooth(method = "lm", formula = y~exp(-x), fullrange = T, size = .8)+
+  theme_classic()+
+    theme(panel.grid.major = element_line(),
+          axis.line = element_line(size = .5, colour = "black", linetype = 1),
+          axis.ticks = element_line(size = .5, colour = "black"),
+          axis.text = element_text(size = 10, colour = "black"),
+          axis.title.x = element_text(size = 10, face = "bold"),
+          axis.title.y = element_text(size = 10, face = "bold"),
+          legend.text = element_text(size = 5),
+          legend.title = element_text(size = 10, face = "bold"),
+          plot.title = element_text(size = 15, face = "bold", hjust = .5))
+dev.off()
+```
+
+```{r add corrected d18O to data, include=FALSE, eval=FALSE}
+#read in data
+rm(list = ls())
+
+otoint_lowres <- read.delim("Data/Pike/Oto_LA-to-d18O_interpolation.txt",
+                            header = T, stringsAsFactors = F,
+                            dec = ".", sep = "\t")
+
+#Get residuals from d18O ~ Sr
+subset_KD <- subset(otoint_lowres, capt=="KD")
+#subset_KD$res <- NA
+oto_lowres <- otoint_lowres%>%drop_na()%>%filter(capt!="KD")
+
+#0-model
+lm0 <- lm(d18O~1, data = oto_lowres)
+#normal model
+lm1 <- lm(d18O~Sr, data = oto_lowres)
+#exponential decay
+lm2 <- lm(d18O~exp(-Sr), data = oto_lowres)
+
+anova(lm0, lm1)
+anova(lm0, lm2)
+anova(lm1, lm2)
+summary(lm1)
+
+
+oto_lowres$res <- lm1$residuals
+
+subset_KD$res <- scale(subset_KD$d18O)
+subset_KD <- subset_KD%>%drop_na()
+
+oto_lowres <- rbind(oto_lowres, subset_KD)
+
+#check for pattern retention
+plot(oto_lowres[oto_lowres$fish_ID=="BH-01906",]$sims_dist, oto_lowres[oto_lowres$fish_ID=="BH-01906",]$res, type="l")
+
+write.table(oto_lowres, "Data/Pike/Oto_LA-to-d18O_interpolation_with_res.txt", row.names = F, sep = "\t", dec = ".")
+```
+
+```{r average corrected d18O over years, include=FALSE, eval=FALSE}
+#read in data
+rm(list = ls())
+
+otoint_lowres <- read.delim("Data/Pike/Oto_LA-to-d18O_interpolation_with_res.txt",
+                            header = T, stringsAsFactors = F,
+                            dec = ".", sep = "\t")
+
+#get d18O points per year to average over annual signal
+otoint_lowres$lifeyear <- as.factor(otoint_lowres$lifeyear)
+
+yearmean <- otoint_lowres%>%group_by(fish_ID,lifeyear)%>%summarise(n=n())
+mean(yearmean$n)
+#mean of 7.8 so smooth with 8
+
+oto_lowres <- otoint_lowres%>%
+  group_by(fish_ID)%>%
+  transmute(ID=fish_ID,
+            age=age,
+            capt=capt,
+            area=area,
+            d18O=zoo::rollmean(d18O, k=7, fill = NA, align = "left"),
+            res=zoo::rollmean(res, k=7, fill = NA, align = "left"),
+            Sr=Sr,
+            Na=Na,
+            Mg=Mg,
+            Ba=Ba,
+            Mn=Mn,
+            year=lifeyear,
+            dist=sims_dist)
+
+#check for pattern smoothness
+plot(oto_lowres[oto_lowres$ID=="BH-01855",]$dist, oto_lowres[oto_lowres$ID=="BH-01855",]$d18O, type="l")
+
+#Save data
+write.table(oto_lowres, "Data/Pike/Oto_LA-to-d18O_interpolation_all_with_res.txt", 
+            row.names = F,dec = ".", sep = "\t")
+```
+
+## Lifelong niche on population level
+```{r lifelong niche, include=FALSE, eval=FALSE}
+#script to form annual means of elemental data for clustering and increment analysis
+rm(list = ls())
+#Read in data
+otoint_lowres <- read.delim("Data/Pike/Oto_LA-to-d18O_interpolation_all_with_res.txt", header = T,
+                            stringsAsFactors = F, dec = ".", sep = "\t")
+
+otoint_lifehist <- otoint_lowres%>%
+  filter(area!="Control")%>%
+  transmute(ID=ID,
+            age=as.factor(age),
+            capt=capt,
+            area=case_when(area=="WRB"~"Lagoon",
+                           area=="NRB"~"Lagoon",
+                           area=="GB"~"Lagoon",
+                           area=="Freshwater"~"Tributary"),
+            d18O=d18O,
+            d18O_res=res,
+            Sr=Sr,
+            year=as.factor(year),
+            dist=dist)
+
+# Plot lifelong increase in d18O --> colder the older
+mypallette <- viridis::viridis(4, direction = 1)
+
+d18O <- ggplot(otoint_lifehist, aes(year, d18O_res))+
+  geom_boxplot(aes(color = area), width = 0.5, outlier.size = .5)+
+  scale_x_discrete(limits = factor(1:10),
+                   labels=c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10"))+
+  labs(x="Age (years)",
+       y=expression(bold("Sr-corrected"~delta^18*"O"~("VPDB \u2030"))),
+       color="area of capture")+
+  theme_classic()+
+  scale_color_viridis_d(direction = 1, begin = 0, end = 0.7)+
+  theme(panel.grid.major = element_line(),
+        legend.position = "none",
+        legend.background = element_blank(),
+        legend.box.background = element_blank(),
+        axis.line = element_line(size = .5, colour = "black", linetype = 1),
+        axis.ticks = element_line(size = .5, colour = "black"),
+        axis.text = element_text(size = 10, colour = "black"),
+        axis.title.x = element_text(size = 10, face = "bold"),
+        axis.title.y = element_text(size = 10, face = "bold",
+                                    margin = margin(r=15)),
+        legend.text = element_text(size = 10),
+        legend.title = element_text(size = 10, face = "bold"),
+        legend.key.size = unit(.8,"line"))+
+  coord_cartesian(clip = "off")+
+  geom_segment(x=-0.56, y=0, xend=-0.56, yend=2.5, 
+               lineend = "butt", linejoin = "mitre",
+               size=3, arrow = arrow(length = unit(0.2, "inches")),
+               color="#66CCCC")+
+  annotation_custom(grob = text_grob(label = "lower temperature", 
+                                     rot = 90, face = "bold", size = 7),
+                                     ymin=0, ymax=2.5,
+                                     xmin=-0.57, xmax=-0.57)+
+  geom_segment(x=-0.56, y=0, xend=-0.56, yend=-2.5, 
+               lineend = "butt", linejoin = "mitre",
+               size=3, arrow = arrow(length = unit(0.2, "inches")),
+               color="#FF6666")+
+  annotation_custom(grob = text_grob(label = "higher temperature", 
+                                     rot = -90, face = "bold", size = 7),
+                                     ymin=0, ymax=-2.5,
+                                     xmin=-0.54, xmax=-0.54)
+
+#Lifelong increase in Sr/Ca --> saltier the older
+SrCa <- ggplot(otoint_lifehist, aes(year, Sr*1000))+
+  geom_boxplot(aes(color = area), width = 0.5, outlier.size = .5)+
+  scale_x_discrete(limits = factor(1:10))+
+  labs(x="Age (years)",
+       y="Sr/Ca (mg/g)",
+       color="area of capture")+
+  theme_classic()+
+  scale_color_viridis_d(direction = 1, begin = 0, end = 0.7)+
+  theme(panel.grid.major = element_line(),
+        legend.position = "none",
+        legend.background = element_blank(),
+        legend.box.background = element_blank(),
+        axis.line = element_line(size = .5, colour = "black", linetype = 1),
+        axis.ticks = element_line(size = .5, colour = "black"),
+        axis.text = element_text(size = 10, colour = "black"),
+        axis.title.x = element_text(size = 10, face = "bold"),
+        axis.title.y = element_text(size = 10, face = "bold"),
+        legend.text = element_text(size = 10),
+        legend.title = element_text(size = 10, face = "bold"),
+        legend.key.size = unit(.8,"line"))
+
+png(filename = "Figures/Lifelong_niche_revised.png", 
+    width = 4500, height = 1800, res = 600)
+ggarrange(d18O, SrCa, ncol = 2, nrow = 1, labels = c("A", "B"), common.legend = TRUE,
+                legend = "bottom")
+dev.off()
+```
+
+```{r profile plots, include=FALSE, eval=FALSE}
+#script to calculate profile plots for d18O and Sr/Ca
+rm(list = ls())
+
+LA <- read.delim("Data/Pike/Pike-LA-ICPMS-years_whole-sample_with-TL.txt", 
+                 header = T, stringsAsFactors = F, sep = "\t", dec = ".")
+
+d18O <- read.delim("Data/Pike/Pike-d18O-years_whole-sample_with-TL.txt", header = T,
+                stringsAsFactors = F, sep = "\t", dec = ".")
+LA <- LA%>%
+  transmute(ID = fishID,
+            capt = area,
+            area = case_when(area %in% "Peene" ~ "Freshwater",
+                             area %in% "Barthe" ~ "Freshwater",
+                             area %in% "NHG" ~ "Freshwater",
+                             area %in% "Sehrowbach" ~ "Freshwater",
+                             area %in% "Badendycksgraben" ~ "Freshwater",
+                             area %in% "Ziese" ~ "Freshwater",
+                             area %in% "KB" ~ "Marine",
+                             area %in% "SB" ~ "Marine",
+                             area %in% "WB" ~ "Marine",
+                             area %in% "BEG" ~ "Marine", 
+                             area %in% "KJB" ~ "Marine",
+                             area %in% "GJB" ~ "Marine",
+                             area %in% "GB" ~ "Marine",
+                             area %in% "KD" ~ "control",
+                             TRUE ~ "NA"),
+            Sr = Sr,
+            Na = Na,
+            Mg = Mg,
+            Ba = Ba,
+            Mn = Mn,
+            LA_dist = LA_dist)
+
+d18O <- d18O%>%
+  transmute(ID = fishID,
+            capt = area,
+            area = case_when(area %in% "Peene" ~ "Freshwater",
+                             area %in% "Barthe" ~ "Freshwater",
+                             area %in% "NHG" ~ "Freshwater",
+                             area %in% "Sehrowbach" ~ "Freshwater",
+                             area %in% "Bandycksgraben" ~ "Freshwater",
+                             area %in% "Ziese" ~ "Freshwater",
+                             area %in% "KB" ~ "Marine",
+                             area %in% "SB" ~ "Marine",
+                             area %in% "WB" ~ "Marine",
+                             area %in% "BEG" ~ "Marine", 
+                             area %in% "KJB" ~ "Marine",
+                             area %in% "GJB" ~ "Marine",
+                             area %in% "GB" ~ "Marine",
+                             area %in% "KD" ~ "Freshwater",
+                             TRUE ~ "NA"),
+            d18O = d18O,
+            sims_dist = sims_dist)
+
+
+LA <- LA %>% drop_na()
+d18O <- d18O%>%drop_na()
+# Loop--------------------------------------------------------------------------
+
+mypallete <- viridis::viridis(4, direction = 1)
+
+IDOto <- unique(d18O$ID)
+
+for (i in 1:length(IDOto)) {
+  png(paste0("Data/Pike/Otoplots/", IDOto[i], ".png"), width = 1200)
+  par(mfrow=c(1,2))
+  plot(LA[which(LA$ID == IDOto[i]), "LA_dist",], 
+       LA[which(LA$ID == IDOto[i]), "Sr",], main = "", 
+       xlab =  "", ylab = "", 
+       xlim = c(0, max(LA[which(LA$ID == IDOto[i]), "LA_dist",], na.rm = T)),
+       ylim = c(0, max(LA$Sr, na.rm = T)),
+       col.axis = "black", type = "l", col = "orange", lwd = 4, 
+       fg = "black", axes = FALSE, pch = 19)
+  axis(1, pos = mean(LA[LA$area == "Freshwater",]$Sr, na.rm = T), 
+       at = c(0, max(LA[which(LA$ID == IDOto[i]), "LA_dist",], na.rm = T)-20,
+              max(LA$LA_dist)),
+       labels = c("", "Süßwasser", ""), lwd.ticks = 0, tck = 0, 
+       col = mypallete[3], lty = 1, lwd = 3, mgp = c(0,0.5,0), 
+       cex.axis=2, font = 2)
+  axis(1, pos = mean(LA[LA$area == "Freshwater",]$Sr, na.rm = T)+
+         sd(LA[LA$area == "Freshwater",]$Sr, na.rm = T), 
+       at = c(0, 1200, max(LA$LA_dist)),
+       labels = c("", "", ""), lwd.ticks = 0, tck = 0, 
+       col = mypallete[3], lty = 3, lwd = 3, mgp = c(0,0,0))
+  axis(1, pos = mean(LA[LA$area == "Freshwater",]$Sr, na.rm = T)-
+         sd(LA[LA$area == "Freshwater",]$Sr, na.rm = T), 
+       at = c(0, 1200, max(LA$LA_dist)),
+       labels = c("", "", ""), lwd.ticks = 0, tck = 0, 
+       col = mypallete[3], lty = 3, lwd = 3, mgp = c(0,0,0))
+  axis(1, pos = mean(LA[LA$area == "Marine",]$Sr, na.rm = T), 
+       at = c(0, max(LA[which(LA$ID == IDOto[i]), "LA_dist",], na.rm = T)-20,
+                   max(LA$LA_dist)),
+       labels = c("", "Brackwasser", ""), lwd.ticks = 0, tck = 0, 
+       col = mypallete[1], lty = 1, lwd = 3, mgp = c(0,0.5,0), 
+       cex.axis=2, font = 2)
+  axis(1, pos = mean(LA[LA$area == "Marine",]$Sr, na.rm = T)-
+         sd(LA[LA$area == "Marine",]$Sr, na.rm = T), 
+       at = c(0, 1200, max(LA$LA_dist)),
+       labels = c("", "", ""), lwd.ticks = 0, tck = 0, 
+       col = mypallete[1], lty = 3, lwd = 3, mgp = c(0,0,0))
+  axis(1, pos = mean(LA[LA$area == "Marine",]$Sr, na.rm = T)+
+         sd(LA[LA$area == "Marine",]$Sr, na.rm = T), 
+       at = c(0, 1200, max(LA$LA_dist)),
+       labels = c("", "", ""), lwd.ticks = 0, tck = 0, 
+       col = mypallete[1], lty = 3, lwd = 3, mgp = c(0,0,0))
+  axis(1, pos = 0, at = seq(0, max(LA$LA_dist), 500),
+       labels = seq(0, max(LA$LA_dist), 500), lwd.ticks = 5, tck = 0, 
+       col = "black", lty = 1, lwd = 2, mgp = c(0, 0.5, 0),
+       cex.axis=2, font = 2)
+  axis(2, pos = 0, tcl = 0.2,
+       at = seq(round(min(LA$Sr),3), 
+                round(max(LA$Sr),3), 0.001), 
+       labels = seq(round(min(LA$Sr)*1000,0), 
+                    round(max(LA$Sr)*1000,0), 1),
+       las = 2, mgp = c(0, 0.5, 0), cex.axis = 2, font = 2, 
+       lwd = 2, col = "black", col.axis = "black")
+  title(ylab = list("Sr/Ca Verhältnis", cex = 2, font=2),
+        xlab = list("Distanz vom Kern [um]", cex = 2, font=2), 
+        col.lab = "black", line = 1)
+  text(x = 300, y = 0.008, labels = paste(IDOto[i], "-", 
+                                         LA[which(LA$ID == IDOto[i]), "capt",]), 
+       cex=3, font=2)
+
+  plot(d18O[which(d18O$ID == IDOto[i]), "sims_dist",],
+       d18O[which(d18O$ID == IDOto[i]), "d18O",], main = "",
+       xlab =  "", ylab = "",
+       xlim = c(0, max(d18O[which(d18O$ID == IDOto[i]), "sims_dist",], na.rm = T)),
+       ylim = c(min(d18O$d18O, na.rm = T), 0),
+       col.axis = "black", cex.axis = 1, type = "b", col = "blue", lwd = 3,
+       fg = "black", cex = 1, axes = FALSE, pch = 19)
+  axis(1, pos = mean(d18O[which(d18O$ID == IDOto[i]), "d18O",], na.rm = T),
+       at = c(0, 200, max(d18O[which(d18O$ID == IDOto[i]), "sims_dist",], na.rm = T)),
+       labels = c("", "indiv.mean", ""), lwd.ticks = 0, tck = 0,
+       col = "black", lty = 3, lwd = 1, mgp = c(0,0,0))
+  axis(1, pos = mean(d18O$d18O, na.rm = T),
+       at = c(0, 200, max(d18O$sims_dist)),
+       labels = c("", "global mean", ""), lwd.ticks = 0, tck = 0,
+       col = "black", lty = 1, lwd = 1, mgp = c(0,0,0))
+  axis(1, pos = round(min(d18O$d18O), 1), at = seq(0, max(d18O$sims_dist), 500),
+       labels = seq(0, max(d18O$sims_dist), 500), lwd.ticks = 5, tck = 0,
+       col = "black", lty = 1, lwd = 2, mgp = c(0, 0.5, 0))
+  axis(2, pos = 0, tcl = 0.2,
+       at = seq(round(min(d18O$d18O, na.rm = T),1),
+                round(max(d18O$d18O, na.rm = T),1), 1),
+       labels = seq(round(min(d18O$d18O, na.rm = T),1),
+                    round(max(d18O$d18O, na.rm = T),1), 1),
+       las = 2, mgp = c(0, 0.5, 0), cex.axis = 1,
+       lwd = 2, col = "black", col.axis = "black")
+  title(ylab = "d18O", cex.lab = 1,
+        col.lab = "black", line = 5)
+  title(xlab = "Distance [um]", cex.lab = 1,
+        col.lab = "black", line = 1)
+  title(main = "d18O")
+  text(x = 300, y = 0, labels = d18O[which(d18O$ID == IDOto[i]), "capt",])
+  dev.off()  
+}
+```
+
+## DTW-cluster analysis
+```{r subset data, include=FALSE, eval=FALSE}
+rm(list = ls())
+#read in data
+oto_lowres <- read.delim("Data/Pike/Oto_LA-to-d18O_interpolation_all_with_res.txt",
+                         header = T, dec = ".", sep = "\t",
+                         stringsAsFactors = F)
+
+#subset according to cluster
+Fgroup <- subset(oto_lowres, area=="Freshwater")
+Bgroup <- oto_lowres%>%filter(area=="WRB"|area=="NRB"|area=="GB")
+
+#Test length, needs to equal N=120
+length(unique(Bgroup$ID))+length(unique(Fgroup$ID))
+
+#Function to reinterpolate an element to a specified length
+interpol <- function(series, length, element){
+  ids <- NULL
+  values <- NULL
+  
+  IDOto <- unique(series$ID)
+  
+  for (i in 1:length(IDOto)) {
+    id <- rep(IDOto[i], length.out=length)
+    value <- approx(series[which(series$ID==IDOto[i]), element],
+                      method = "linear", n=length, rule = 2)[2]
+    ids <- c(ids, id)
+    values <- unlist(c(values, value))
+    }
+  
+  data.frame(ID=ids, value=values)
+  
+}
+
+#Test function
+Srall <- interpol(series = oto_clusters, length = 250, element = "Sr")
+d18Oall <- interpol(series = oto_clusters, length = 250, element = "d18O")
+
+Srd18O <- cbind(Srall, d18Oall[,2])
+colnames(Srd18O) <- c("ID", "Sr", "d18O")
+
+
+#compare pattern retention
+par(mfrow=c(1,2))
+plot(oto_clusters[oto_clusters$ID=="BH-91045",]$dist,
+     oto_clusters[oto_clusters$ID=="BH-91045",]$Sr, type="l",
+     xlab="Distance (um)", ylab="Sr/Ca")
+plot(row_number(Srd18O[Srd18O$ID=="BH-91045",]$ID),
+     Srd18O[Srd18O$ID=="BH-91045",]$Sr, type="l",
+     xlab="transect cell", ylab="Sr/Ca")
+
+#data package
+save(Fgroup,Bgroup,interpol, file = "Data/Pike/Pike_element_transects.RData")
+```
+
+```{r dtw data prep, include=FALSE, eval=FALSE}
+rm(list = ls())
+#read in data
+load("Data/Pike/Pike_element_transects.RData")
+
+#Look for sample size
+length(unique(Bgroup$ID))
+length(unique(Fgroup$ID))
+
+#Mean transect length
+summary(count(Bgroup, "ID")) #Median length 34 data points
+summary(count(Fgroup, "ID")) #Median length 38 data points
+
+#Make year a factor
+Bgroup$year <- as.factor(Bgroup$year)
+Fgroup$year <- as.factor(Fgroup$year)
+
+#reinterpolate to standard length (based on medians)
+dataB1 <- interpol(series = Bgroup, length = 35, element = "Sr")
+dataB2 <- interpol(series = Bgroup, length = 35, element = "d18O_res")
+
+dataF1 <- interpol(series = Fgroup, length = 40, element = "Sr")
+dataF2 <- interpol(series = Fgroup, length = 40, element = "d18O_res")
+
+dataB <- cbind(dataB1, dataB2[,2])
+dataF <- cbind(dataF1, dataF2[,2])
+
+dataB[,2] <- scale(dataB[,2])
+dataF[,2] <- scale(dataF[,2])
+
+#Data Lists for hierarchical clustering
+IDOto <- unique(dataB$ID)
+Bseries <- list()
+
+for (i in 1:length(IDOto)) {
+  m <- as.matrix(dataB[which(dataB$ID==IDOto[i]),c(2,3)])
+  Bseries[[length(Bseries)+1]] <- m
+}
+
+names(Bseries) <- c(IDOto)
+
+IDOto <- unique(dataF$ID)
+Fseries <- list()
+
+for (i in 1:length(IDOto)) {
+  m <- as.matrix(dataF[which(dataF$ID==IDOto[i]),c(2,3)])
+  Fseries[[length(Fseries)+1]] <- m
+}
+
+names(Fseries) <- c(IDOto)
+
+#save data series
+save(Fgroup,Bgroup,dataB, dataF, Bseries, Fseries, interpol,
+     file = "Data/Pike/Pike_element_transects_hierarchical-prep.RData")
+```
+
+```{r Hierarchical dtw clustering with even lengths, include=FALSE, eval=FALSE}
+rm(list = ls())
+
+#load hierarchical data prep
+load("Data/Pike/Pike_element_transects_hierarchical-prep.RData")
+
+#cluster Bodden with cutoff test
+clust_B <- tsclust(series = Bseries, type = "hierarchical",
+                  k = 2L:6L,centroid = dba,
+                  control = hierarchical_control(method = "ward.D"),
+                  seed = 5L,args = tsclust_args(dist = list(window.size =5L)))
+
+names(clust_B) <- paste0("k_",2L:6L)
+
+EvalB <- data.frame(sapply(clust_B, cvi, type = "internal"))
+EvalB$win <- c("max", "max","max","min","min","max","min")
+
+#cluster FW with cutoff test
+clust_F <- tsclust(series = Fseries, type = "hierarchical",
+                  k = 2L:6L,centroid = dba,
+                  control = hierarchical_control(method = "ward.D"),
+                  seed = 101L,args = tsclust_args(dist = list(window.size =5L)))
+
+names(clust_F) <- paste0("k_",2L:6L)
+
+EvalF <- data.frame(sapply(clust_B, cvi, type = "internal"))
+EvalF$win <- c("max", "max","max","min","min","max","min")
+
+#Plot best solution lagoons
+Lagoonplot <- plot(clust_B$k_4, type="sc", lwd=2)+
+  ylim(-3,3)+ggtitle(expression("Sr/"~delta^18~O~"cluster centroids"))+
+  labs(x="transect cell", y="scaled value")+
+  theme(axis.text = element_text(size = 25, color="black"),
+        axis.title = element_text(size = 25),
+        plot.title = element_text(size = 25, hjust = 0.5))
+
+#Plot best solution Freshwater
+FWplot <- plot(clust_F$k_6, type="sc", linetype="solid", cex=2)+
+  ylim(-3,3)+ggtitle(expression("Sr/"~delta^18~O~"cluster centroids"))+
+  labs(x="transect cell", y="scaled value")+
+  theme(axis.text = element_text(size = 25, color="black"),
+        axis.title = element_text(size = 25),
+        plot.title = element_text(size = 25, hjust = 0.5))
+
+save(Fgroup,Bgroup,dataB, dataF, Bseries, Fseries, interpol, clust_B, clust_F, Lagoonplot, FWplot,
+     file = "Data/Pike/Adults_hierarchical_clusters.RData")
+```
+
+```{r cluster assignment hierarchical, include=FALSE, eval=FALSE}
+rm(list=ls())
+load("Data/Pike/Data/Pike/Pike_hierarchical_clusters.RData")
+#assign clusters to fish
+Lagoonplot
+
+fishassign_B2 <- data.frame(ID=names(Bseries), 
+                            clust2=factor(clust_B$k_4@cluster, 
+                                           levels = c(1:4), 
+                                           labels = c("BW int saline|cold",
+                                                      "BW Low saline|shift",
+                                                      "BW high saline|warm",
+                                                      "BW high saline|cold")))
+
+FWplot
+
+fishassign_F2 <- data.frame(ID=names(Fseries), 
+                            clust2=factor(clust_F$k_6@cluster, 
+                                           levels = c(1:6), 
+                                           labels = c("FW low saline|shift",
+                                                      "FW low saline|cold",
+                                                      "FW int saline|const",
+                                                      "FW high saline|shift",
+                                                      "FW int saline|shift",
+                                                      "FW high saline|const")))
+#Join dtw clusters with pike data
+fishassign_B <- Bgroup%>%
+  group_by(ID)%>%
+  transmute(ID=ID,
+            capt=capt,
+            area=as.factor(area),
+            areaorder=case_when(area=="WRB"~1,
+                                area=="NRB"~2,
+                                area=="GB"~3,
+                                area=="Freshwater"~4))%>%
+  distinct()%>%
+  inner_join(fishassign_B2, by="ID")%>%
+  mutate(clust=fct_relevel(clust2,
+                           "BW Low saline|shift",
+                           "BW int saline|cold",
+                           "BW high saline|warm",
+                           "BW high saline|cold"))
+
+fishassign_F <- Fgroup%>%
+  group_by(ID)%>%
+  transmute(ID=ID,
+            capt=capt,
+            area=area)%>%
+  distinct()%>%
+  inner_join(fishassign_F2, by="ID")%>%
+  mutate(clust2=fct_relevel(clust2,
+                            "FW low saline|cold",
+                            "FW low saline|shift",
+                            "FW int saline|const",
+                            "FW int saline|shift",
+                            "FW high saline|const",
+                            "FW high saline|shift"))
+
+write.table(fishassign_B, "Data/Pike/Bcluster_all.txt", row.names = F, sep = "\t",
+            dec = ".")
+write.table(fishassign_F, "Data/Pike/Fcluster_all.txt", row.names = F, sep = "\t",
+            dec = ".")
+
+save(Fgroup,Bgroup,dataB, dataF, Bseries, Fseries, interpol, clust_B, clust_F,
+     fishassign_B, fishassign_F, Lagoonplot, FWplot,
+     file = "Data/Pike/Pike_hierarchical_clusters.RData")
+```
+
+```{r plot Bodden proportions Saline, eval=FALSE}
+rm(list = ls())
+
+mypallette <- viridis::viridis(4, direction = -1)
+
+#Plot Bodden proportions
+fishassign_B <- read.delim("Data/Pike/Bcluster_all.txt", header=T, stringsAsFactors = F, sep = "\t", dec = ".")
+fishassign_B <- fishassign_B[c(-4,-6)]
+#get freshwater fish
+fishassign_F <- read.delim("Data/Pike/Fcluster_all.txt", header=T, stringsAsFactors = F, sep = "\t", dec = ".")
+
+#Assign anadromous based on mean FW line
+fishassign_B[which(fishassign_B$ID=="BH-01904"), "clust2"] <- "anadromous"
+
+#png(filename = "C:/Users/timor/Nextcloud2/Timo/BODDENHECHT/Chapter 2/Stats/Niche analysis/Figures/Clusterassign.jpg", width = 2400, height = 800)
+ggplot(fishassign_B, aes(reorder(area, areaorder), fill=clust))+
+  geom_bar(position = "fill", width = .5)+theme_minimal()+
+  labs(x="", y="proportion", fill="assigned cluster")+
+  scale_fill_manual(breaks=c("BW Low saline|shift",
+                             "BW int saline|cold",
+                             "BW high saline|warm",
+                             "BW high saline|cold"), 
+                    values = mypallette)+
+  theme(axis.text.y = element_text(size = 15, color = "black"),
+        axis.text.x = element_text(size = 15, color = "black"),
+        axis.title = element_text(size = 15),
+        legend.text = element_text(size = 10),
+        legend.title = element_text(size = 10),
+        legend.position = "top")
+#dev.off()
+
+mypallette <- viridis::viridis(6, direction = -1)
+#Plot FW proportions
+ggplot(fishassign_F, aes(capt, fill=clust2))+
+  geom_bar(position = "fill", width = .5)+theme_minimal()+
+  labs(x="", y="proportion", fill="assigned cluster")+
+  scale_fill_manual(breaks=c("FW low saline|cold",
+                            "FW low saline|shift",
+                            "FW int saline|const",
+                            "FW int saline|shift",
+                            "FW high saline|const",
+                            "FW high saline|shift"), 
+                    values = mypallette)+
+  theme(axis.text.y = element_text(size = 25, color = "black"),
+        axis.text.x = element_text(size = 25, color = "black"),
+        axis.title = element_text(size = 25),
+        legend.text = element_text(size = 25),
+        legend.title = element_text(size = 25),
+        legend.position = "right")
+```
+
+```{r table of poportions, include=FALSE, eval=FALSE}
+Allpike <- rbind(fishassign_B, fishassign_F)
+
+WRBpike <- Allpike%>%filter(area=="WRB")
+NRBpike <- Allpike%>%filter(area=="NRB")
+GBpike <- Allpike%>%filter(capt=="GB")
+FWpike <- Allpike%>%filter(area=="Freshwater")
+
+Lagoontable <- rbind(WRBpike, NRBpike, GBpike)
+
+Lagoonprobs <- table(Lagoontable$area,Lagoontable$clust2)
+write.table(Lagoonprobs, "Data/Pike/Lagoonprobs.csv", sep = ",")
+FWprobs <- table(FWpike$area,FWpike$clust2)
+write.table(FWprobs, "Data/Pike/FWprobs.csv", sep = ",")
+
+Props <- data.frame(Ecotype=c("Lagoon low S, cold temperature",
+                              "Lagoon med S, cold temperature",
+                              "Lagoon high S, warm temperature",
+                              "Freshwater resident, cold temperature",
+                              "Freshwater migrant, warm temperature"),
+                    WRB=paste0(round(summary(WRBpike$clust2)/nrow(WRBpike)*100,1),
+                               "%"),
+                    NRB=paste0(round(summary(NRBpike$clust2)/nrow(NRBpike)*100,1),
+                               "%"),
+                    GB=paste0(round(summary(GBpike$clust2)/nrow(GBpike)*100,1),
+                              "%"),
+                    Tributary=paste0(round(summary(FWpike$clust2)/nrow(FWpike)*100,
+                                           1),"%"),
+                    Total=paste0(round(summary(Allpike$clust2)/nrow(Allpike)*100,
+                                           1),"%"))
+
+Propstable <- Props%>%flextable()%>%
+  set_caption("Proportions of ecotypes per sampling area")%>%
+  set_table_properties(width = 0.99, layout = "autofit")%>%
+  theme_vanilla()%>%
+  align(j=c(2:5), align = "right")%>%
+  vline(j=1)
+
+#save as docx
+save_as_docx(Propstable, path = "Tables/Proportions_Ecotypes.docx")
+```
+
+```{r plot lagoon clusters, include=FALSE, eval=FALSE}
+rm(list=ls())
+load("Data/Pike/Pike_element_transects_hierarchical_all.RData")
+
+Lagoonplot
+
+Bgroup.clus <- Bgroup%>%inner_join(fishassign_B, by="ID")
+Fgroup.clus <- Fgroup%>%inner_join(fishassign_F, by="ID")
+
+Groupall <- rbind(Bgroup.clus, Fgroup.clus)
+
+agebreaks <- Groupall%>%group_by(ID, year)%>%
+  summarise(yeardist=max(dist))%>%
+  ungroup()%>%group_by(year)%>%
+  mutate(mean.yeardist=mean(yeardist))
+
+agebreaks.num <- unique(agebreaks$mean.yeardist)
+agebreaks.label <- as.character(seq(1,11,1))
+
+
+# Generate a color ramp between two colors
+colorRampPalette(c("#004643", "#F1C40F"))(4)
+
+
+mypallette <- c(colorRampPalette(c("#004643", "#F1C40F"))(4))
+
+A <- ggplot(Bgroup.clus[Bgroup.clus$clust2=="BW high saline|warm",])+
+  geom_line(aes(dist, Sr*1000, group=ID), color="grey", size=.3, alpha=.8)+
+  geom_smooth(aes(dist, Sr*1000), color="black", fill=mypallette[1], 
+              alpha=1, size=.3, method = "gam")+
+  theme_classic()+
+  ylim(0, 8)+
+  scale_y_continuous(breaks = seq(0,8,1), limits = c(0,8))+
+  xlim(0,2100)+
+  labs(x="", y=expression("Sr/Ca (mg/g)"))+
+  theme(legend.position = "none", 
+        panel.grid.major.y = element_line(size = .3),
+        panel.border = element_rect(fill = NA, size = .3),
+        plot.margin = margin(c(20,10,1,1)),
+        axis.text.x = element_text(color = "white", size = 7),
+        axis.text.y = element_text(color = "black", size = 7),
+        axis.ticks.x = element_line(colour = "transparent"),
+        axis.ticks.y = element_line(size = 0.3),
+        axis.ticks.length.y = unit(0.05, "cm"),
+        axis.title.y = element_text(size = 7, margin = margin(r=10)),
+        axis.line = element_line(size = 0.3))+
+  coord_cartesian(clip = "off")+
+  annotation_custom(grob = text_grob(label = "high saline, warm (N=22)", size = 7),
+                    ymin = 10, ymax = 10, xmin = 750, xmax = 750)
+
+B <- ggplot(Bgroup.clus[Bgroup.clus$clust2=="BW high saline|cold",])+
+  geom_line(aes(dist, Sr*1000, group=ID), color="grey", size=.3, alpha=.8)+
+  geom_smooth(aes(dist, Sr*1000), color="black", fill=mypallette[2], 
+              alpha=1, size=.3, method = "gam")+
+  theme_classic()+
+  ylim(0, 8)+
+  scale_y_continuous(breaks = seq(0,8,1), limits = c(0,8))+
+  xlim(0,2100)+
+  labs(x="", y=expression("Sr/Ca (mg/g)"))+
+  theme(legend.position = "none", 
+        panel.grid.major.y = element_line(size = .3),
+        panel.border = element_rect(fill = NA, size = .3),
+        plot.margin = margin(c(20,10,1,1)),
+        axis.text.x = element_text(color = "white", size = 7),
+        axis.text.y = element_text(color = "white", size = 7),
+        axis.ticks.y = element_line(size = 0.3, colour = "transparent"),
+        axis.ticks.length.y = unit(0.05, "cm"),
+        axis.ticks.x = element_line(size = 0.3, colour = "transparent"),
+        axis.title.y = element_text(size = 7, margin = margin(r=10), colour = "transparent"),
+        axis.line = element_line(size = 0.3))+
+  coord_cartesian(clip = "off")+
+  annotation_custom(grob = text_grob(label = "high saline, constant (N=7)", size = 7),
+                    ymin = 10, ymax = 10, xmin = 1090, xmax = 1090)
+
+C <- ggplot(Bgroup.clus[Bgroup.clus$clust2=="BW int saline|cold",])+
+  geom_line(aes(dist, Sr*1000, group=ID), color="grey", size=.3, alpha=.8)+
+  geom_smooth(aes(dist, Sr*1000), color="black", fill=mypallette[3], 
+              alpha=1, size=.3, method = "gam")+
+  theme_classic()+
+  ylim(0, 8)+
+  scale_y_continuous(breaks = seq(0,8,1), limits = c(0,8))+
+  xlim(0,2100)+
+  labs(x="", y=expression("Sr/Ca (mg/g)"))+
+  theme(legend.position = "none", 
+        panel.grid.major.y = element_line(size = .3),
+        panel.border = element_rect(fill = NA, size = .3),
+        plot.margin = margin(c(20,10,1,1)),
+        axis.text.x = element_text(color = "white", size = 7),
+        axis.text.y = element_text(color = "white", size = 7),
+        axis.ticks.y = element_line(size = 0.3, colour = "transparent"),
+        axis.ticks.length.y = unit(0.05, "cm"),
+        axis.ticks.x = element_line(size = 0.3, colour = "transparent"),
+        axis.title.y = element_text(size = 7, margin = margin(r=10), colour = "transparent"),
+        axis.line = element_line(size = 0.3))+
+  coord_cartesian(clip = "off")+
+  annotation_custom(grob = text_grob(label = "int. saline, cold (N=17)", size = 7),
+                    ymin = 10, ymax = 10, xmin = 1090, xmax = 1090)
+
+D <- ggplot(Bgroup.clus[Bgroup.clus$clust2=="BW Low saline|shift",])+
+  geom_line(aes(dist, Sr*1000, group=ID), color="grey", size=.3, alpha=.8)+
+  geom_smooth(aes(dist, Sr*1000), color="black", fill=mypallette[4], 
+              alpha=1, size=.3, method = "gam")+
+  theme_classic()+
+  ylim(0, 8)+
+  scale_y_continuous(breaks = seq(0,8,1), limits = c(0,8))+
+  xlim(0,2100)+
+  labs(x="", y=expression(""))+
+  theme(legend.position = "none", 
+        panel.grid.major.y = element_line(size = .3),
+        panel.border = element_rect(fill = NA, size = .3),
+        plot.margin = margin(c(20,10,1,1)),
+        axis.text.x = element_text(color = "white", size = 7),
+        axis.text.y = element_text(color = "white", size = 7),
+        axis.ticks.y = element_line(size = 0.3, colour = "transparent"),
+        axis.ticks.length.y = unit(0.05, "cm"),
+        axis.ticks.x = element_line(size = 0.3, colour = "transparent"),
+        axis.title.y = element_text(size = 7, margin = margin(r=10)),
+        axis.line = element_line(size = 0.3))+
+  coord_cartesian(clip = "off")+
+  annotation_custom(grob = text_grob(label = "Low saline, shift (N=20)", size = 7),
+                    ymin = 10, ymax = 10, xmin = 1000, xmax = 1000)
+
+A1 <- ggplot(Bgroup.clus[Bgroup.clus$clust2=="BW high saline|warm",])+
+  geom_line(aes(dist, d18O_res, group=ID), color="grey", size=.3, alpha=.8)+
+  geom_smooth(aes(dist, d18O_res), color="black", fill=mypallette[1], 
+              alpha=1, size=.3, method = "gam")+
+  theme_classic()+
+  ylim(-3, 3)+
+  xlim(0,2100)+
+  labs(x="", y=expression("scaled"~delta^18*"O"~("VPDB \u2030")))+
+  theme(legend.position = "none", 
+        panel.grid.major.y = element_line(size = .3),
+        panel.border = element_rect(fill = NA, size = .3),
+        plot.margin = margin(c(20,10,1,1)),
+        axis.text.x = element_text(color = "black", size = 7),
+        axis.text.y = element_text(color = "black", size = 7),
+        axis.ticks.y = element_line(size = 0.3),
+        axis.ticks.length.y = unit(0.05, "cm"),
+        axis.ticks.x = element_line(size = 0.3),
+        axis.title.y = element_text(size = 7, margin = margin(r=10)),
+        axis.line = element_line(size = 0.3))+
+  coord_cartesian(clip = "off")
+
+B1 <- ggplot(Bgroup.clus[Bgroup.clus$clust2=="BW high saline|cold",])+
+  geom_line(aes(dist, d18O_res, group=ID), color="grey", size=.3, alpha=.8)+
+  geom_smooth(aes(dist, d18O_res), color="black", fill=mypallette[2], 
+              alpha=1, size=.3, method = "gam")+
+  theme_classic()+
+  ylim(-3, 3)+
+  xlim(0,2100)+
+  labs(x="", y=expression("scaled"~delta^18*"O"~("VPDB \u2030")))+
+  theme(legend.position = "none", 
+        panel.grid.major.y = element_line(size = .3),
+        panel.border = element_rect(fill = NA, size = .3),
+        plot.margin = margin(c(20,10,1,1)),
+        axis.text.x = element_text(color = "black", size = 7),
+        axis.text.y = element_text(color = "white", size = 7),
+        axis.ticks.y = element_line(size = 0.3, colour = "transparent"),
+        axis.ticks.length.y = unit(0.05, "cm"),
+        axis.ticks.x = element_line(size = 0.3),
+        axis.title.y = element_text(size = 7, margin = margin(r=10), colour = "transparent"),
+        axis.line = element_line(size = 0.3))+
+  coord_cartesian(clip = "off")
+
+C1 <- ggplot(Bgroup.clus[Bgroup.clus$clust2=="BW int saline|cold",])+
+  geom_line(aes(dist, d18O_res, group=ID), color="grey", size=.3, alpha=.8)+
+  geom_smooth(aes(dist, d18O_res), color="black", fill=mypallette[3], 
+              alpha=1, size=.3, method = "gam")+
+  theme_classic()+
+  ylim(-3, 3)+
+  xlim(0,2100)+
+  labs(x="", y=expression("scaled"~delta^18*"O"~("VPDB \u2030")))+
+  theme(legend.position = "none", 
+        panel.grid.major.y = element_line(size = .3),
+        panel.border = element_rect(fill = NA, size = .3),
+        plot.margin = margin(c(-10,10,1,1)),
+        axis.text.x = element_text(color = "black", size = 7),
+        axis.text.y = element_text(color = "white", size = 7),
+        axis.ticks.y = element_line(size = 0.3, colour = "transparent"),
+        axis.ticks.length.y = unit(0.05, "cm"),
+        axis.ticks.x = element_line(size = 0.3),
+        axis.title.y = element_text(size = 7, margin = margin(r=10), colour = "transparent"),
+        axis.line = element_line(size = 0.3))+
+  coord_cartesian(clip = "off")
+
+D1 <- ggplot(Bgroup.clus[Bgroup.clus$clust2=="BW Low saline|shift",])+
+  geom_line(aes(dist, d18O_res, group=ID), color="grey", size=.3, alpha=.8)+
+  geom_smooth(aes(dist, d18O_res), color="black", fill=mypallette[4], 
+              alpha=1, size=.3, method = "gam")+
+  theme_classic()+
+  ylim(-3, 3)+
+  xlim(0,2100)+
+  labs(x="", y=expression("scaled"~delta^18*"O"~("VPDB \u2030")))+
+  theme(legend.position = "none", 
+        panel.grid.major.y = element_line(size = .3),
+        panel.border = element_rect(fill = NA, size = .3),
+        plot.margin = margin(c(20,10,1,1)),
+        axis.text.x = element_text(color = "black", size = 7),
+        axis.text.y = element_text(color = "white", size = 7),
+        axis.ticks.y = element_line(size = 0.3, colour = "transparent"),
+        axis.ticks.length.y = unit(0.05, "cm"),
+        axis.ticks.x = element_line(size = 0.3),
+        axis.title.y = element_text(size = 7, margin = margin(r=10), colour = "transparent"),
+        axis.line = element_line(size = 0.3))+
+  coord_cartesian(clip = "off")
+
+allplot <- align_plots(A, B, C, D, A1, B1, C1, D1, align = "hv", padding = 0.5, axis = "tblr")
+
+png(filename = "Figures/DTW-plots/Allplot_midres.png", width = 4000, height = 2000, res = 600)
+plot_grid(allplot[[1]],allplot[[2]],allplot[[3]],allplot[[4]], allplot[[5]], allplot[[6]], allplot[[7]], allplot[[8]], nrow = 2, ncol = 4)
+dev.off()
+```
+
+```{r plot freshwater clusters, include=FALSE, eval=FALSE}
+mypallette <- c(colorRampPalette(c("#C5D86D","#00BFB2","#F1C40F"))(6))
+
+A <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW low saline|cold",])+
+  geom_line(aes(dist, Sr*1000, group=ID), color="grey", size=.3, alpha=.8)+
+  geom_smooth(aes(dist, Sr*1000), color="black", fill=mypallette[1], 
+              alpha=1, size=.3, method = "gam")+
+  theme_classic()+
+  ylim(0, 8)+
+  scale_y_continuous(breaks = seq(0,8,1), limits = c(0,8))+
+  xlim(0,2100)+
+  labs(x="", y=expression("Sr/Ca (mg/g)"))+
+  theme(legend.position = "none", 
+        panel.grid.major.y = element_line(size = .3),
+        panel.border = element_rect(fill = NA, size = .3),
+        plot.margin = margin(c(20,10,1,1)),
+        axis.text.x = element_text(color = "white", size = 7),
+        axis.text.y = element_text(color = "black", size = 7),
+        axis.ticks.x = element_line(colour = "transparent"),
+        axis.ticks.y = element_line(size = 0.3),
+        axis.ticks.length.y = unit(0.05, "cm"),
+        axis.title.y = element_text(size = 7, margin = margin(r=10)),
+        axis.line = element_line(size = 0.3))+
+  coord_cartesian(clip = "off")+
+  annotation_custom(grob = text_grob(label = "low saline, cold (N=4)", size = 7),
+                    ymin = 10, ymax = 10, xmin = 750, xmax = 750)
+
+B <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW low saline|shift",])+
+  geom_line(aes(dist, Sr*1000, group=ID), color="grey", size=.3, alpha=.8)+
+  geom_smooth(aes(dist, Sr*1000), color="black", fill=mypallette[2], 
+              alpha=1, size=.3, method = "gam")+
+  theme_classic()+
+  ylim(0, 8)+
+  scale_y_continuous(breaks = seq(0,8,1), limits = c(0,8))+
+  xlim(0,2100)+
+  labs(x="", y=expression("Sr/Ca (mg/g)"))+
+  theme(legend.position = "none", 
+        panel.grid.major.y = element_line(size = .3),
+        panel.border = element_rect(fill = NA, size = .3),
+        plot.margin = margin(c(20,10,1,1)),
+        axis.text.x = element_text(color = "white", size = 7),
+        axis.text.y = element_text(color = "white", size = 7),
+        axis.ticks.y = element_line(size = 0.3, colour = "transparent"),
+        axis.ticks.length.y = unit(0.05, "cm"),
+        axis.ticks.x = element_line(size = 0.3, colour = "transparent"),
+        axis.title.y = element_text(size = 7, margin = margin(r=10), colour = "transparent"),
+        axis.line = element_line(size = 0.3))+
+  coord_cartesian(clip = "off")+
+  annotation_custom(grob = text_grob(label = "low saline, shift (N=9)", size = 7),
+                    ymin = 10, ymax = 10, xmin = 750, xmax = 750)
+
+C <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW int saline|const",])+
+  geom_line(aes(dist, Sr*1000, group=ID), color="grey", size=.3, alpha=.8)+
+  geom_smooth(aes(dist, Sr*1000), color="black", fill=mypallette[3], 
+              alpha=1, size=.3, method = "gam")+
+  theme_classic()+
+  ylim(0, 8)+
+  scale_y_continuous(breaks = seq(0,8,1), limits = c(0,8))+
+  xlim(0,2100)+
+  labs(x="", y=expression("Sr/Ca (mg/g)"))+
+  theme(legend.position = "none", 
+        panel.grid.major.y = element_line(size = .3),
+        panel.border = element_rect(fill = NA, size = .3),
+        plot.margin = margin(c(20,10,1,1)),
+        axis.text.x = element_text(color = "white", size = 7),
+        axis.text.y = element_text(color = "white", size = 7),
+        axis.ticks.y = element_line(size = 0.3, colour = "transparent"),
+        axis.ticks.length.y = unit(0.05, "cm"),
+        axis.ticks.x = element_line(size = 0.3, colour = "transparent"),
+        axis.title.y = element_text(size = 7, margin = margin(r=10), colour = "transparent"),
+        axis.line = element_line(size = 0.3))+
+  coord_cartesian(clip = "off")+
+  annotation_custom(grob = text_grob(label = "int. saline, constant (N=14)", size = 7),
+                    ymin = 10, ymax = 10, xmin = 750, xmax = 750)
+
+D <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW int saline|shift",])+
+  geom_line(aes(dist, Sr*1000, group=ID), color="grey", size=.3, alpha=.8)+
+  geom_smooth(aes(dist, Sr*1000), color="black", fill=mypallette[4], 
+              alpha=1, size=.3, method = "gam")+
+  theme_classic()+
+  ylim(0, 8)+
+  scale_y_continuous(breaks = seq(0,8,1), limits = c(0,8))+
+  xlim(0,2100)+
+  labs(x="", y=expression("Sr/Ca (mg/g)"))+
+  theme(legend.position = "none", 
+        panel.grid.major.y = element_line(size = .3),
+        panel.border = element_rect(fill = NA, size = .3),
+        plot.margin = margin(c(20,10,1,1)),
+        axis.text.x = element_text(color = "white", size = 7),
+        axis.text.y = element_text(color = "white", size = 7),
+        axis.ticks.y = element_line(size = 0.3, colour = "transparent"),
+        axis.ticks.length.y = unit(0.05, "cm"),
+        axis.ticks.x = element_line(size = 0.3, colour = "transparent"),
+        axis.title.y = element_text(size = 7, margin = margin(r=10), colour = "transparent"),
+        axis.line = element_line(size = 0.3))+
+  coord_cartesian(clip = "off")+
+  annotation_custom(grob = text_grob(label = "int. saline, shift (N=7)", size = 7),
+                    ymin = 10, ymax = 10, xmin = 750, xmax = 750)
+
+E <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW high saline|shift",])+
+  geom_line(aes(dist, Sr*1000, group=ID), color="grey", size=.3, alpha=.8)+
+  geom_smooth(aes(dist, Sr*1000), color="black", fill=mypallette[5], 
+              alpha=1, size=.3, method = "gam")+
+  theme_classic()+
+  ylim(0, 8)+
+  scale_y_continuous(breaks = seq(0,8,1), limits = c(0,8))+
+  xlim(0,2100)+
+  labs(x="", y=expression("Sr/Ca (mg/g)"))+
+  theme(legend.position = "none", 
+        panel.grid.major.y = element_line(size = .3),
+        panel.border = element_rect(fill = NA, size = .3),
+        plot.margin = margin(c(20,10,1,1)),
+        axis.text.x = element_text(color = "white", size = 7),
+        axis.text.y = element_text(color = "white", size = 7),
+        axis.ticks.y = element_line(size = 0.3, colour = "transparent"),
+        axis.ticks.length.y = unit(0.05, "cm"),
+        axis.ticks.x = element_line(size = 0.3, colour = "transparent"),
+        axis.title.y = element_text(size = 7, margin = margin(r=10), colour = "transparent"),
+        axis.line = element_line(size = 0.3))+
+  coord_cartesian(clip = "off")+
+  annotation_custom(grob = text_grob(label = "high saline, shift (N=9)", size = 7),
+                    ymin = 10, ymax = 10, xmin = 750, xmax = 750)
+
+F1 <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW high saline|const",])+
+  geom_line(aes(dist, Sr*1000, group=ID), color="grey", size=.3, alpha=.8)+
+  geom_smooth(aes(dist, Sr*1000), color="black", fill=mypallette[6], 
+              alpha=1, size=.3, method = "gam")+
+  theme_classic()+
+  ylim(0, 8)+
+  scale_y_continuous(breaks = seq(0,8,1), limits = c(0,8))+
+  xlim(0,2100)+
+  labs(x="", y=expression("Sr/Ca (mg/g)"))+
+  theme(legend.position = "none", 
+        panel.grid.major.y = element_line(size = .3),
+        panel.border = element_rect(fill = NA, size = .3),
+        plot.margin = margin(c(20,10,1,1)),
+        axis.text.x = element_text(color = "white", size = 7),
+        axis.text.y = element_text(color = "white", size = 7),
+        axis.ticks.y = element_line(size = 0.3, colour = "transparent"),
+        axis.ticks.length.y = unit(0.05, "cm"),
+        axis.ticks.x = element_line(size = 0.3, colour = "transparent"),
+        axis.title.y = element_text(size = 7, margin = margin(r=10), colour = "transparent"),
+        axis.line = element_line(size = 0.3))+
+  coord_cartesian(clip = "off")+
+  annotation_custom(grob = text_grob(label = "high saline, constant (N=11)", size = 7),
+                    ymin = 10, ymax = 10, xmin = 750, xmax = 750)
+
+A1 <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW low saline|cold",])+
+  geom_line(aes(dist, d18O_res, group=ID), color="grey", size=.3, alpha=.8)+
+  geom_smooth(aes(dist, d18O_res), color="black", fill=mypallette[1], 
+              alpha=1, size=.3, method = "gam")+
+  theme_classic()+
+  ylim(-3, 3)+
+  xlim(0,2100)+
+  labs(x="", y=expression("scaled"~delta^18*"O"~("VPDB \u2030")))+
+  theme(legend.position = "none", 
+        panel.grid.major.y = element_line(size = .3),
+        panel.border = element_rect(fill = NA, size = .3),
+        plot.margin = margin(c(20,10,1,1)),
+        axis.text.x = element_text(color = "black", size = 7),
+        axis.text.y = element_text(color = "black", size = 7),
+        axis.ticks.y = element_line(size = 0.3),
+        axis.ticks.length.y = unit(0.05, "cm"),
+        axis.ticks.x = element_line(size = 0.3),
+        axis.title.y = element_text(size = 7, margin = margin(r=10)),
+        axis.line = element_line(size = 0.3))+
+  coord_cartesian(clip = "off")
+
+B1 <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW low saline|shift",])+
+  geom_line(aes(dist, d18O_res, group=ID), color="grey", size=.3, alpha=.8)+
+  geom_smooth(aes(dist, d18O_res), color="black", fill=mypallette[2], 
+              alpha=1, size=.3, method = "gam")+
+  theme_classic()+
+  ylim(-3, 3)+
+  xlim(0,2100)+
+  labs(x="", y=expression("scaled"~delta^18*"O"~("VPDB \u2030")))+
+  theme(legend.position = "none", 
+        panel.grid.major.y = element_line(size = .3),
+        panel.border = element_rect(fill = NA, size = .3),
+        plot.margin = margin(c(20,10,1,1)),
+        axis.text.x = element_text(color = "black", size = 7),
+        axis.text.y = element_text(color = "white", size = 7),
+        axis.ticks.y = element_line(size = 0.3, colour = "transparent"),
+        axis.ticks.length.y = unit(0.05, "cm"),
+        axis.ticks.x = element_line(size = 0.3),
+        axis.title.y = element_text(size = 7, margin = margin(r=10), colour = "transparent"),
+        axis.line = element_line(size = 0.3))+
+  coord_cartesian(clip = "off")
+
+C1 <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW int saline|const",])+
+  geom_line(aes(dist, d18O_res, group=ID), color="grey", size=.3, alpha=.8)+
+  geom_smooth(aes(dist, d18O_res), color="black", fill=mypallette[3], 
+              alpha=1, size=.3, method = "gam")+
+  theme_classic()+
+  ylim(-3, 3)+
+  xlim(0,2100)+
+  labs(x="", y=expression("scaled"~delta^18*"O"~("VPDB \u2030")))+
+  theme(legend.position = "none", 
+        panel.grid.major.y = element_line(size = .3),
+        panel.border = element_rect(fill = NA, size = .3),
+        plot.margin = margin(c(20,10,1,1)),
+        axis.text.x = element_text(color = "black", size = 7),
+        axis.text.y = element_text(color = "white", size = 7),
+        axis.ticks.y = element_line(size = 0.3, colour = "transparent"),
+        axis.ticks.length.y = unit(0.05, "cm"),
+        axis.ticks.x = element_line(size = 0.3),
+        axis.title.y = element_text(size = 7, margin = margin(r=10), colour = "transparent"),
+        axis.line = element_line(size = 0.3))+
+  coord_cartesian(clip = "off")
+
+D1 <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW int saline|shift",])+
+  geom_line(aes(dist, d18O_res, group=ID), color="grey", size=.3, alpha=.8)+
+  geom_smooth(aes(dist, d18O_res), color="black", fill=mypallette[4], 
+              alpha=1, size=.3, method = "gam")+
+  theme_classic()+
+  ylim(-3, 3)+
+  xlim(0,2100)+
+  labs(x="", y=expression("scaled"~delta^18*"O"~("VPDB \u2030")))+
+  theme(legend.position = "none", 
+        panel.grid.major.y = element_line(size = .3),
+        panel.border = element_rect(fill = NA, size = .3),
+        plot.margin = margin(c(20,10,1,1)),
+        axis.text.x = element_text(color = "black", size = 7),
+        axis.text.y = element_text(color = "white", size = 7),
+        axis.ticks.y = element_line(size = 0.3, colour = "transparent"),
+        axis.ticks.length.y = unit(0.05, "cm"),
+        axis.ticks.x = element_line(size = 0.3),
+        axis.title.y = element_text(size = 7, margin = margin(r=10), colour = "transparent"),
+        axis.line = element_line(size = 0.3))+
+  coord_cartesian(clip = "off")
+
+E1 <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW high saline|shift",])+
+  geom_line(aes(dist, d18O_res, group=ID), color="grey", size=.3, alpha=.8)+
+  geom_smooth(aes(dist, d18O_res), color="black", fill=mypallette[5], 
+              alpha=1, size=.3, method = "gam")+
+  theme_classic()+
+  ylim(-3, 3)+
+  xlim(0,2100)+
+  labs(x="", y=expression("scaled"~delta^18*"O"~("VPDB \u2030")))+
+  theme(legend.position = "none", 
+        panel.grid.major.y = element_line(size = .3),
+        panel.border = element_rect(fill = NA, size = .3),
+        plot.margin = margin(c(20,10,1,1)),
+        axis.text.x = element_text(color = "black", size = 7),
+        axis.text.y = element_text(color = "white", size = 7),
+        axis.ticks.y = element_line(size = 0.3, colour = "transparent"),
+        axis.ticks.length.y = unit(0.05, "cm"),
+        axis.ticks.x = element_line(size = 0.3),
+        axis.title.y = element_text(size = 7, margin = margin(r=10), colour = "transparent"),
+        axis.line = element_line(size = 0.3))+
+  coord_cartesian(clip = "off")
+
+F2 <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW high saline|const",])+
+  geom_line(aes(dist, d18O_res, group=ID), color="grey", size=.3, alpha=.8)+
+  geom_smooth(aes(dist, d18O_res), color="black", fill=mypallette[6], 
+              alpha=1, size=.3, method = "gam")+
+  theme_classic()+
+  ylim(-3, 3)+
+  xlim(0,2100)+
+  labs(x="", y=expression("scaled"~delta^18*"O"~("VPDB \u2030")))+
+  theme(legend.position = "none", 
+        panel.grid.major.y = element_line(size = .3),
+        panel.border = element_rect(fill = NA, size = .3),
+        plot.margin = margin(c(20,10,1,1)),
+        axis.text.x = element_text(color = "black", size = 7),
+        axis.text.y = element_text(color = "white", size = 7),
+        axis.ticks.y = element_line(size = 0.3, colour = "transparent"),
+        axis.ticks.length.y = unit(0.05, "cm"),
+        axis.ticks.x = element_line(size = 0.3),
+        axis.title.y = element_text(size = 7, margin = margin(r=10), colour = "transparent"),
+        axis.line = element_line(size = 0.3))+
+  coord_cartesian(clip = "off")
+
+allplot <- align_plots(A, B, C, D, E, F1, A1, B1, C1, D1, E1, F2, align = "hv")
+
+png(filename = "Figures/DTW-plots/Allplot_FW_highres.png", width = 12000, height = 4000, res = 600)
+plot_grid(allplot[[1]], allplot[[2]], allplot[[3]], allplot[[4]], allplot[[5]], allplot[[6]], 
+          allplot[[7]], allplot[[8]], allplot[[9]], allplot[[10]], allplot[[11]], allplot[[12]], nrow = 2, ncol = 6)
+dev.off()
+```
+
+```{r plot ecotypes, include=FALSE, eval=FALSE}
+
+rm(list=ls())
+load("Data/Pike/Pike_element_transects_hierarchical_all.RData")
+
+Lagoonplot
+
+Bgroup.clus <- Bgroup%>%inner_join(fishassign_B, by="ID")
+Fgroup.clus <- Fgroup%>%inner_join(fishassign_F, by="ID")
+
+Groupall <- rbind(Bgroup.clus, Fgroup.clus)
+
+mypalette <- adjustcolor(c("#004643","#00BFB2","#F1C40F","#C5D86D","#AF3800"), alpha.f = 0.6)
+
+allpike_eco <- Groupall%>%
+  mutate(ecotype=case_when(clust2=="FW low saline|cold"~"FW-resident",
+                              clust2=="FW low saline|shift"~"FW-resident",
+                              clust2=="FW int saline|const"~"Anadromous",
+                              clust2=="FW int saline|shift"~"Anadromous",
+                              clust2=="FW high saline|shift"~"Anadromous",
+                              clust2=="FW high saline|const"~"Trans-habitat",
+                              clust2=="BW Low saline|shift"~"Trans-habitat",
+                              clust2=="BW int saline|cold"~"BW-resident",
+                              clust2=="BW high saline|cold"~"BW-resident",
+                              clust2=="BW high saline|warm"~"BW-resident"))
+
+A <- ggplot(allpike_eco[allpike_eco$ecotype=="FW-resident",])+
+  geom_line(aes(dist, Sr*1000, group=ID), color="grey", size=.3, alpha=.8)+
+  geom_smooth(aes(dist, Sr*1000), color="black", fill=mypalette[4], 
+              alpha=1, size=.3, method = "gam")+
+  theme_classic()+
+  ylim(0, 8)+
+  scale_y_continuous(breaks = seq(0,8,1), limits = c(0,8))+
+  xlim(0,2100)+
+  labs(x="", y=expression("Sr/Ca (mg/g)"))+
+  theme(legend.position = "none", 
+        panel.grid.major.y = element_line(size = .3),
+        panel.border = element_rect(fill = NA, size = .3),
+        plot.margin = margin(c(20,10,1,1)),
+        axis.text.x = element_text(color = "white", size = 7),
+        axis.text.y = element_text(color = "black", size = 7),
+        axis.ticks.x = element_line(colour = "transparent"),
+        axis.ticks.y = element_line(size = 0.3),
+        axis.ticks.length.y = unit(0.05, "cm"),
+        axis.title.y = element_text(size = 7, margin = margin(r=10)),
+        axis.line = element_line(size = 0.3))+
+  coord_cartesian(clip = "off")+
+  annotation_custom(grob = text_grob(label = "Freshwater resident (N = 13)", size = 7),
+                    ymin = 10, ymax = 10, xmin = 750, xmax = 750)
+
+A1 <- ggplot(allpike_eco[allpike_eco$ecotype=="FW-resident",])+
+  geom_line(aes(dist, d18O_res, group=ID), color="grey", size=.3, alpha=.8)+
+  geom_smooth(aes(dist, d18O_res), color="black", fill=mypalette[4], 
+              alpha=1, size=.3, method = "gam")+
+  theme_classic()+
+  ylim(-3, 3)+
+  xlim(0,2100)+
+  labs(x="", y=expression("scaled"~delta^18*"O"~("VPDB \u2030")))+
+  theme(legend.position = "none", 
+        panel.grid.major.y = element_line(size = .3),
+        panel.border = element_rect(fill = NA, size = .3),
+        plot.margin = margin(c(20,10,1,1)),
+        axis.text.x = element_text(color = "black", size = 7),
+        axis.text.y = element_text(color = "black", size = 7),
+        axis.ticks.y = element_line(size = 0.3),
+        axis.ticks.length.y = unit(0.05, "cm"),
+        axis.ticks.x = element_line(size = 0.3),
+        axis.title.y = element_text(size = 7, margin = margin(r=10)),
+        axis.line = element_line(size = 0.3))+
+  coord_cartesian(clip = "off")
+
+B <- ggplot(allpike_eco[allpike_eco$ecotype=="BW-resident",])+
+  geom_line(aes(dist, Sr*1000, group=ID), color="grey", size=.3, alpha=.8)+
+  geom_smooth(aes(dist, Sr*1000), color="black", fill=mypalette[1], 
+              alpha=1, size=.3, method = "gam")+
+  theme_classic()+
+  ylim(0, 8)+
+  scale_y_continuous(breaks = seq(0,8,1), limits = c(0,8))+
+  xlim(0,2100)+
+  labs(x="", y=expression("Sr/Ca (mg/g)"))+
+  theme(legend.position = "none", 
+        panel.grid.major.y = element_line(size = .3),
+        panel.border = element_rect(fill = NA, size = .3),
+        plot.margin = margin(c(20,10,1,1)),
+        axis.text.x = element_text(color = "white", size = 7),
+        axis.text.y = element_text(color = "white", size = 7),
+        axis.ticks.y = element_line(size = 0.3, colour = "transparent"),
+        axis.ticks.length.y = unit(0.05, "cm"),
+        axis.ticks.x = element_line(size = 0.3, colour = "transparent"),
+        axis.title.y = element_text(size = 7, margin = margin(r=10), colour = "transparent"),
+        axis.line = element_line(size = 0.3))+
+  coord_cartesian(clip = "off")+
+  annotation_custom(grob = text_grob(label = "Brackish resident (N = 46)", size = 7),
+                    ymin = 10, ymax = 10, xmin = 1090, xmax = 1090)
+
+B1 <- ggplot(allpike_eco[allpike_eco$ecotype=="BW-resident",])+
+  geom_line(aes(dist, d18O_res, group=ID), color="grey", size=.3, alpha=.8)+
+  geom_smooth(aes(dist, d18O_res), color="black", fill=mypalette[1], 
+              alpha=1, size=.3, method = "gam")+
+  theme_classic()+
+  ylim(-3, 3)+
+  xlim(0,2100)+
+  labs(x="", y=expression("scaled"~delta^18*"O"~("VPDB \u2030")))+
+  theme(legend.position = "none", 
+        panel.grid.major.y = element_line(size = .3),
+        panel.border = element_rect(fill = NA, size = .3),
+        plot.margin = margin(c(20,10,1,1)),
+        axis.text.x = element_text(color = "black", size = 7),
+        axis.text.y = element_text(color = "white", size = 7),
+        axis.ticks.y = element_line(size = 0.3, colour = "transparent"),
+        axis.ticks.length.y = unit(0.05, "cm"),
+        axis.ticks.x = element_line(size = 0.3),
+        axis.title.y = element_text(size = 7, margin = margin(r=10), colour = "transparent"),
+        axis.line = element_line(size = 0.3))+
+  coord_cartesian(clip = "off")
+
+C <- ggplot(allpike_eco[allpike_eco$ecotype=="Anadromous",])+
+  geom_line(aes(dist, Sr*1000, group=ID), color="grey", size=.3, alpha=.8)+
+  geom_smooth(aes(dist, Sr*1000), color="black", fill=mypalette[2], 
+              alpha=1, size=.3, method = "gam")+
+  theme_classic()+
+  ylim(0, 8)+
+  scale_y_continuous(breaks = seq(0,8,1), limits = c(0,8))+
+  xlim(0,2100)+
+  labs(x="", y=expression("Sr/Ca (mg/g)"))+
+  theme(legend.position = "none", 
+        panel.grid.major.y = element_line(size = .3),
+        panel.border = element_rect(fill = NA, size = .3),
+        plot.margin = margin(c(20,10,1,1)),
+        axis.text.x = element_text(color = "white", size = 7),
+        axis.text.y = element_text(color = "white", size = 7),
+        axis.ticks.y = element_line(size = 0.3, colour = "transparent"),
+        axis.ticks.length.y = unit(0.05, "cm"),
+        axis.ticks.x = element_line(size = 0.3, colour = "transparent"),
+        axis.title.y = element_text(size = 7, margin = margin(r=10), colour = "transparent"),
+        axis.line = element_line(size = 0.3))+
+  coord_cartesian(clip = "off")+
+  annotation_custom(grob = text_grob(label = "Anadromous type (N = 30)", size = 7),
+                    ymin = 10, ymax = 10, xmin = 1090, xmax = 1090)
+
+C1 <- ggplot(allpike_eco[allpike_eco$ecotype=="Anadromous",])+
+  geom_line(aes(dist, d18O_res, group=ID), color="grey", size=.3, alpha=.8)+
+  geom_smooth(aes(dist, d18O_res), color="black", fill=mypalette[2], 
+              alpha=1, size=.3, method = "gam")+
+  theme_classic()+
+  ylim(-3, 3)+
+  xlim(0,2100)+
+  labs(x="", y=expression("scaled"~delta^18*"O"~("VPDB \u2030")))+
+  theme(legend.position = "none", 
+        panel.grid.major.y = element_line(size = .3),
+        panel.border = element_rect(fill = NA, size = .3),
+        plot.margin = margin(c(-10,10,1,1)),
+        axis.text.x = element_text(color = "black", size = 7),
+        axis.text.y = element_text(color = "white", size = 7),
+        axis.ticks.y = element_line(size = 0.3, colour = "transparent"),
+        axis.ticks.length.y = unit(0.05, "cm"),
+        axis.ticks.x = element_line(size = 0.3),
+        axis.title.y = element_text(size = 7, margin = margin(r=10), colour = "transparent"),
+        axis.line = element_line(size = 0.3))+
+  coord_cartesian(clip = "off")
+
+D <- ggplot(allpike_eco[allpike_eco$ecotype=="Trans-habitat",])+
+  geom_line(aes(dist, Sr*1000, group=ID), color="grey", size=.3, alpha=.8)+
+  geom_smooth(aes(dist, Sr*1000), color="black", fill=mypalette[3], 
+              alpha=1, size=.3, method = "gam")+
+  theme_classic()+
+  ylim(0, 8)+
+  scale_y_continuous(breaks = seq(0,8,1), limits = c(0,8))+
+  xlim(0,2100)+
+  labs(x="", y=expression(""))+
+  theme(legend.position = "none", 
+        panel.grid.major.y = element_line(size = .3),
+        panel.border = element_rect(fill = NA, size = .3),
+        plot.margin = margin(c(20,10,1,1)),
+        axis.text.x = element_text(color = "white", size = 7),
+        axis.text.y = element_text(color = "white", size = 7),
+        axis.ticks.y = element_line(size = 0.3, colour = "transparent"),
+        axis.ticks.length.y = unit(0.05, "cm"),
+        axis.ticks.x = element_line(size = 0.3, colour = "transparent"),
+        axis.title.y = element_text(size = 7, margin = margin(r=10)),
+        axis.line = element_line(size = 0.3))+
+  coord_cartesian(clip = "off")+
+  annotation_custom(grob = text_grob(label = "Cross-habitat type (N = 31)", size = 7),
+                    ymin = 10, ymax = 10, xmin = 1000, xmax = 1000)
+
+D1 <- ggplot(allpike_eco[allpike_eco$ecotype=="Trans-habitat",])+
+  geom_line(aes(dist, d18O_res, group=ID), color="grey", size=.3, alpha=.8)+
+  geom_smooth(aes(dist, d18O_res), color="black", fill=mypalette[3], 
+              alpha=1, size=.3, method = "gam")+
+  theme_classic()+
+  ylim(-3, 3)+
+  xlim(0,2100)+
+  labs(x="", y=expression("scaled"~delta^18*"O"~("VPDB \u2030")))+
+  theme(legend.position = "none", 
+        panel.grid.major.y = element_line(size = .3),
+        panel.border = element_rect(fill = NA, size = .3),
+        plot.margin = margin(c(20,10,1,1)),
+        axis.text.x = element_text(color = "black", size = 7),
+        axis.text.y = element_text(color = "white", size = 7),
+        axis.ticks.y = element_line(size = 0.3, colour = "transparent"),
+        axis.ticks.length.y = unit(0.05, "cm"),
+        axis.ticks.x = element_line(size = 0.3),
+        axis.title.y = element_text(size = 7, margin = margin(r=10), colour = "transparent"),
+        axis.line = element_line(size = 0.3))+
+  coord_cartesian(clip = "off")
+
+allplot <- align_plots(A, B, C, D, A1, B1, C1, D1, align = "hv", padding = 0.5, axis = "tblr")
+
+png(filename = "Figures/DTW-plots/Allplot_ecotypes.png", width = 4000, height = 2000, res = 600)
+plot_grid(allplot[[1]],allplot[[3]],allplot[[4]],allplot[[2]], allplot[[5]], allplot[[7]], allplot[[8]], allplot[[6]], nrow = 2, ncol = 4)
+dev.off()
+```
+
+```{r dissimilarity test, include=FALSE, eval=FALSE}
+rm(list = ls())
+#read in data
+load("Data/Pike/Pike_element_transects_hierarchical_all.RData")
+
+dataLagoon <- Bgroup%>%
+  transmute(ID=ID,
+            Sr=Sr,
+            d18O_res=d18O_res,
+            year=year)
+
+dataFW <- Fgroup%>%
+  transmute(ID=ID,
+            Sr=Sr,
+            d18O_res=d18O_res,
+            year=year)
+
+#transform data to all positive
+dataLagoon$d18O_res <- (dataLagoon$d18O_res+sqrt((min(dataLagoon$d18O_res))^2))
+#So a value of d18O res is now to be interpreted as residual from predicted
+#value + 2.518462
+
+dataLagoon$Sr <- (dataLagoon$Sr+sqrt((min(dataLagoon$Sr))^2))
+#So a value of Sr is now to be interpreted as scaled value + 2.716513
+
+#Same for reshwater group
+dataFW$d18O_res <- (dataFW$d18O_res+sqrt((min(dataFW$d18O_res))^2))
+dataFW$Sr <- (dataFW$Sr+sqrt((min(dataFW$Sr))^2))
+
+#join
+data <- rbind(dataLagoon, dataFW)
+
+#make list of matrices Bodden
+IDOto <- unique(data$ID)
+series <- list()
+
+for (i in 1:length(IDOto)) {
+  m <- as.matrix(data[which(data$ID==IDOto[i]),])
+  series[[length(series)+1]] <- m
+}
+
+names(series) <- c(IDOto)
+
+#Revert from list to data frame, assign cell numbers
+Series <- do.call(rbind.data.frame,series)
+Series$ID <- substr(rownames(Series), 1,8)
+rownames(Series) <- NULL
+
+#Make cluster list
+Bclust <- fishassign_B%>%
+  transmute(ID=ID,
+            clust=clust2)
+Fclust <- fishassign_F%>%
+  transmute(ID=ID,
+            clust=clust2)
+
+clust <- rbind(Bclust, Fclust)
+
+#Assign years based on cell numbers, join with cluster ID
+Series1 <- Series%>%
+  inner_join(clust, by="ID")%>%
+  transmute(ID=ID,
+            year=case_when(year<2~"orig",
+                           year>1&year<3~"juv",
+                           year>2~"adult"),
+            clust=clust,
+            Sr=Sr,
+            d18O_res=d18O_res)%>%
+  group_by(ID, year)%>%
+  summarize(ID=ID,
+            year=year,
+            clust=clust,
+            Sr=mean(as.numeric(Sr)),
+            d18O_res=mean(as.numeric(d18O_res)))%>%
+  distinct()
+
+#Make wide for testing
+Series2 <- pivot_wider(Series1, names_from = year, values_from = c(Sr, d18O_res))
+
+#cluster needs to be a factor
+Series2$clust <- as.factor(Series2$clust)
+
+#make mvabund object of Sr and d18O data
+elements <- mvabund(Series2[,3:8])
+
+boxplot(elements, na.rm=T)
+
+Pikedist <- vegdist(elements, method = "euclidean", na.rm = T)
+Disp <- betadisper(Pikedist, Series2$clust)
+anova(Disp)
+
+plot(Disp)
+
+adonis2(elements~Series2$clust, method = "euclidean", permutations = 9999, na.rm=T)
+```
+
+```{r jackknife reclassification, eval=FALSE}
+set.seed(128)
+
+Series3 <- na.omit(Series2)
+
+Series3 <- Series3%>%
+  mutate(clust=case_when(clust=="FW low saline|cold"~"FW_resident",
+                            clust=="FW low saline|shift"~"FW_resident",
+                            clust=="FW int saline|const"~"Anadromous",
+                            clust=="FW int saline|shift"~"Anadromous",
+                            clust=="FW high saline|shift"~"Anadromous",
+                            clust=="FW high saline|const"~"Trans-habitat",
+                            clust=="BW Low saline|shift"~"Trans-habitat",
+                            clust=="BW int saline|cold"~"BW-resident",
+                            clust=="BW high saline|cold"~"BW-resident",
+                            clust=="BW high saline|warm"~"BW-resident"))
+
+#jackknife reclassification
+lda.m2 <- lda(clust~Sr_orig+Sr_juv+Sr_adult+d18O_res_orig+d18O_res_juv+d18O_res_adult, 
+              data = Series3, CV=TRUE)
+
+Series3$jacknife <- lda.m2$class
+summary <- Series3 %>% summarise(clust=clust,
+                      jackknife=jacknife,
+                      lda.error=mean(clust != jacknife))
+```
