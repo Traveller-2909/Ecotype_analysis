@@ -1,0 +1,56 @@
+---
+title: "Analysis_main"
+author: "TR"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r packages, include=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(cowplot)
+library(ggridges)
+library(lme4)
+library(nlme)
+library(lmerTest)
+library(emmeans)
+library(MuMIn)
+library(visreg)
+library(car)
+library(sjPlot)
+library(knitr)
+library(car)
+library(ggpubr)
+library(mclust)
+library(dtwclust)
+library(vegan)
+library(mvabund)
+library(RVAideMemoire)
+library(MASS)
+library(flextable)
+library(gridGraphics)
+library(lubridate)
+library(factoextra)
+library(data.table)
+library(gridExtra)
+library(loo)
+library(bayesplot)
+library("rstan")
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
+```
+
+## preparation of Sr and d18O data
+Five fish excluded: 
+"BH-01701" -> Missplaced transect,
+"BH-01741" -> Vaterite,
+"BH-01908" -> Vaterite,
+"BH-90962" -> Lost,
+"BH-93190" -> no SIMS transect
+## Color codes ecotypes
+"#004643" --> brackish resident,"#00BFB2" --> anadromous,"#F1C40F" --> cross-habitat,"#C5D86D" --> freshwater resident,
+"#AF3800" --> unknown
