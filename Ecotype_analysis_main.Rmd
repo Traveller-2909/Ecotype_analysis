@@ -278,112 +278,20 @@ plot(oto.int2[oto.int2$fish_ID=="BH-01855",]$dist, oto.int2[oto.int2$fish_ID=="B
 fwrite(oto.int2, "Data/pike/elements/Oto_LA-to-d18O_interpolation_Sr-corrected_smooth.csv")
 ```
 
-## Lifelong niche on population level
-```{r lifelong niche, include=FALSE, eval=FALSE}
-#script to form annual means of elemental data for clustering and increment analysis
-rm(list = ls())
-#Read in data
-otoint_lowres <- read.delim("Data/Pike/Oto_LA-to-d18O_interpolation_all_with_res.txt", header = T,
-                            stringsAsFactors = F, dec = ".", sep = "\t")
-
-otoint_lifehist <- otoint_lowres%>%
-  filter(area!="Control")%>%
-  transmute(ID=ID,
-            age=as.factor(age),
-            capt=capt,
-            area=case_when(area=="WRB"~"Lagoon",
-                           area=="NRB"~"Lagoon",
-                           area=="GB"~"Lagoon",
-                           area=="Freshwater"~"Tributary"),
-            d18O=d18O,
-            d18O_res=res,
-            Sr=Sr,
-            year=as.factor(year),
-            dist=dist)
-
-# Plot lifelong increase in d18O --> colder the older
-mypallette <- viridis::viridis(4, direction = 1)
-
-d18O <- ggplot(otoint_lifehist, aes(year, d18O_res))+
-  geom_boxplot(aes(color = area), width = 0.5, outlier.size = .5)+
-  scale_x_discrete(limits = factor(1:10),
-                   labels=c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10"))+
-  labs(x="Age (years)",
-       y=expression(bold("Sr-corrected"~delta^18*"O"~("VPDB \u2030"))),
-       color="area of capture")+
-  theme_classic()+
-  scale_color_viridis_d(direction = 1, begin = 0, end = 0.7)+
-  theme(panel.grid.major = element_line(),
-        legend.position = "none",
-        legend.background = element_blank(),
-        legend.box.background = element_blank(),
-        axis.line = element_line(size = .5, colour = "black", linetype = 1),
-        axis.ticks = element_line(size = .5, colour = "black"),
-        axis.text = element_text(size = 10, colour = "black"),
-        axis.title.x = element_text(size = 10, face = "bold"),
-        axis.title.y = element_text(size = 10, face = "bold",
-                                    margin = margin(r=15)),
-        legend.text = element_text(size = 10),
-        legend.title = element_text(size = 10, face = "bold"),
-        legend.key.size = unit(.8,"line"))+
-  coord_cartesian(clip = "off")+
-  geom_segment(x=-0.56, y=0, xend=-0.56, yend=2.5, 
-               lineend = "butt", linejoin = "mitre",
-               size=3, arrow = arrow(length = unit(0.2, "inches")),
-               color="#66CCCC")+
-  annotation_custom(grob = text_grob(label = "lower temperature", 
-                                     rot = 90, face = "bold", size = 7),
-                                     ymin=0, ymax=2.5,
-                                     xmin=-0.57, xmax=-0.57)+
-  geom_segment(x=-0.56, y=0, xend=-0.56, yend=-2.5, 
-               lineend = "butt", linejoin = "mitre",
-               size=3, arrow = arrow(length = unit(0.2, "inches")),
-               color="#FF6666")+
-  annotation_custom(grob = text_grob(label = "higher temperature", 
-                                     rot = -90, face = "bold", size = 7),
-                                     ymin=0, ymax=-2.5,
-                                     xmin=-0.54, xmax=-0.54)
-
-#Lifelong increase in Sr/Ca --> saltier the older
-SrCa <- ggplot(otoint_lifehist, aes(year, Sr*1000))+
-  geom_boxplot(aes(color = area), width = 0.5, outlier.size = .5)+
-  scale_x_discrete(limits = factor(1:10))+
-  labs(x="Age (years)",
-       y="Sr/Ca (mg/g)",
-       color="area of capture")+
-  theme_classic()+
-  scale_color_viridis_d(direction = 1, begin = 0, end = 0.7)+
-  theme(panel.grid.major = element_line(),
-        legend.position = "none",
-        legend.background = element_blank(),
-        legend.box.background = element_blank(),
-        axis.line = element_line(size = .5, colour = "black", linetype = 1),
-        axis.ticks = element_line(size = .5, colour = "black"),
-        axis.text = element_text(size = 10, colour = "black"),
-        axis.title.x = element_text(size = 10, face = "bold"),
-        axis.title.y = element_text(size = 10, face = "bold"),
-        legend.text = element_text(size = 10),
-        legend.title = element_text(size = 10, face = "bold"),
-        legend.key.size = unit(.8,"line"))
-
-png(filename = "Figures/Lifelong_niche_revised.png", 
-    width = 4500, height = 1800, res = 600)
-ggarrange(d18O, SrCa, ncol = 2, nrow = 1, labels = c("A", "B"), common.legend = TRUE,
-                legend = "bottom")
-dev.off()
-```
-
-```{r profile plots, include=FALSE, eval=FALSE}
-#script to calculate profile plots for d18O and Sr/Ca
+## Lifelong niche (individual and population level)
+```{r calculate profile plots for individuals, include=FALSE, eval=FALSE}
 rm(list = ls())
 
-LA <- read.delim("Data/Pike/Pike-LA-ICPMS-years_whole-sample_with-TL.txt", 
-                 header = T, stringsAsFactors = F, sep = "\t", dec = ".")
+#read in raw data
+LA <- fread("Data/pike/elements/Pike-LA-ICPMS-years_whole-sample_with-TL.txt")
+d18O <- fread("Data/pike/elements/Pike-d18O-years_whole-sample_with-TL.txt")
 
-d18O <- read.delim("Data/Pike/Pike-d18O-years_whole-sample_with-TL.txt", header = T,
-                stringsAsFactors = F, sep = "\t", dec = ".")
+#Convert to data frame
+LA <- as.data.frame(LA)
+d18O <- as.data.frame(d18O)
+
 LA <- LA%>%
-  transmute(ID = fishID,
+  transmute(ID = ID,
             capt = area,
             area = case_when(area %in% "Peene" ~ "Freshwater",
                              area %in% "Barthe" ~ "Freshwater",
@@ -408,7 +316,7 @@ LA <- LA%>%
             LA_dist = LA_dist)
 
 d18O <- d18O%>%
-  transmute(ID = fishID,
+  transmute(ID = ID,
             capt = area,
             area = case_when(area %in% "Peene" ~ "Freshwater",
                              area %in% "Barthe" ~ "Freshwater",
@@ -438,7 +346,7 @@ mypallete <- viridis::viridis(4, direction = 1)
 IDOto <- unique(d18O$ID)
 
 for (i in 1:length(IDOto)) {
-  png(paste0("Data/Pike/Otoplots/", IDOto[i], ".png"), width = 1200)
+  png(paste0("Figures/supplement/individual plots/", IDOto[i], ".png"), width = 1200)
   par(mfrow=c(1,2))
   plot(LA[which(LA$ID == IDOto[i]), "LA_dist",], 
        LA[which(LA$ID == IDOto[i]), "Sr",], main = "", 
@@ -450,7 +358,7 @@ for (i in 1:length(IDOto)) {
   axis(1, pos = mean(LA[LA$area == "Freshwater",]$Sr, na.rm = T), 
        at = c(0, max(LA[which(LA$ID == IDOto[i]), "LA_dist",], na.rm = T)-20,
               max(LA$LA_dist)),
-       labels = c("", "Süßwasser", ""), lwd.ticks = 0, tck = 0, 
+       labels = c("", "Freshwater", ""), lwd.ticks = 0, tck = 0, 
        col = mypallete[3], lty = 1, lwd = 3, mgp = c(0,0.5,0), 
        cex.axis=2, font = 2)
   axis(1, pos = mean(LA[LA$area == "Freshwater",]$Sr, na.rm = T)+
@@ -466,7 +374,7 @@ for (i in 1:length(IDOto)) {
   axis(1, pos = mean(LA[LA$area == "Marine",]$Sr, na.rm = T), 
        at = c(0, max(LA[which(LA$ID == IDOto[i]), "LA_dist",], na.rm = T)-20,
                    max(LA$LA_dist)),
-       labels = c("", "Brackwasser", ""), lwd.ticks = 0, tck = 0, 
+       labels = c("", "Brackish", ""), lwd.ticks = 0, tck = 0, 
        col = mypallete[1], lty = 1, lwd = 3, mgp = c(0,0.5,0), 
        cex.axis=2, font = 2)
   axis(1, pos = mean(LA[LA$area == "Marine",]$Sr, na.rm = T)-
@@ -490,8 +398,8 @@ for (i in 1:length(IDOto)) {
                     round(max(LA$Sr)*1000,0), 1),
        las = 2, mgp = c(0, 0.5, 0), cex.axis = 2, font = 2, 
        lwd = 2, col = "black", col.axis = "black")
-  title(ylab = list("Sr/Ca Verhältnis", cex = 2, font=2),
-        xlab = list("Distanz vom Kern [um]", cex = 2, font=2), 
+  title(ylab = list("Sr/Ca ratio (mg/g)", cex = 2, font=2),
+        xlab = list("distance from core [um]", cex = 2, font=2), 
         col.lab = "black", line = 1)
   text(x = 300, y = 0.008, labels = paste(IDOto[i], "-", 
                                          LA[which(LA$ID == IDOto[i]), "capt",]), 
@@ -530,6 +438,103 @@ for (i in 1:length(IDOto)) {
   text(x = 300, y = 0, labels = d18O[which(d18O$ID == IDOto[i]), "capt",])
   dev.off()  
 }
+```
+
+```{r lifelong niche, include=FALSE, eval=FALSE}
+#script to form annual means of elemental data for clustering and increment analysis
+rm(list = ls())
+#Read in data
+oto.int <- fread("Data/pike/elements/Oto_LA-to-d18O_interpolation_Sr-corrected_smooth.csv")
+
+oto.int.lifehist <- oto.int%>%
+  filter(area!="Control")%>%
+  transmute(ID=ID,
+            age=as.factor(age),
+            capt=capt,
+            area=case_when(area=="WRB"~"Lagoon",
+                           area=="NRB"~"Lagoon",
+                           area=="GB"~"Lagoon",
+                           area=="Freshwater"~"Tributary"),
+            d18O=d18O,
+            d18O_res=res,
+            Sr=Sr,
+            year=as.factor(year),
+            dist=dist)
+
+# Plot lifelong increase in d18O --> colder the older
+mypallette <- viridis::viridis(4, direction = 1)
+
+d18O <- ggplot(oto.int.lifehist, aes(year, d18O_res))+
+  geom_boxplot(aes(color = area), width = 0.5, outlier.size = .5)+
+  scale_x_discrete(limits = factor(1:10),
+                   labels=c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10"))+
+  labs(x="Age (years)",
+       y=expression("Sr-corr."~delta^18*"O"~("VPDB \u2030")),
+       color="area of capture")+
+  theme_classic()+
+  scale_color_viridis_d(direction = 1, begin = 0, end = 0.7)+
+  theme(panel.grid.major = element_line(),
+        legend.position = "none",
+        legend.background = element_blank(),
+        legend.box.background = element_blank(),
+        axis.line = element_line(size = .5, colour = "black", linetype = 1),
+        axis.ticks = element_line(size = .5, colour = "black"),
+        axis.text = element_text(size = 8, colour = "black"),
+        axis.title.x = element_text(size = 8),
+        axis.title.y = element_text(size = 8,
+                                    margin = margin(r=15)),
+        legend.text = element_text(size = 8),
+        legend.title = element_text(size = 8),
+        legend.key.size = unit(.8,"line"))+
+  coord_cartesian(clip = "off")+
+  geom_segment(x=-0.56, y=0, xend=-0.56, yend=2.5, 
+               lineend = "butt", linejoin = "mitre",
+               size=3, arrow = arrow(length = unit(0.2, "inches")),
+               color="#66CCCC")+
+  annotation_custom(grob = text_grob(label = "lower temperature", 
+                                     rot = 90, face = "bold", size = 5),
+                                     ymin=0, ymax=2.5,
+                                     xmin=-0.57, xmax=-0.57)+
+  geom_segment(x=-0.56, y=0, xend=-0.56, yend=-2.5, 
+               lineend = "butt", linejoin = "mitre",
+               size=3, arrow = arrow(length = unit(0.2, "inches")),
+               color="#FF6666")+
+  annotation_custom(grob = text_grob(label = "higher temperature", 
+                                     rot = -90, face = "bold", size = 5),
+                                     ymin=0, ymax=-2.5,
+                                     xmin=-0.54, xmax=-0.54)
+
+#Lifelong increase in Sr/Ca --> saltier the older
+SrCa <- ggplot(oto.int.lifehist, aes(year, Sr*1000))+
+  geom_boxplot(aes(color = area), width = 0.5, outlier.size = .5)+
+  scale_x_discrete(limits = factor(1:10))+
+  labs(x="Age (years)",
+       y="Sr/Ca (mg/g)",
+       color="area of capture")+
+  theme_classic()+
+  scale_color_viridis_d(direction = 1, begin = 0, end = 0.7)+
+  theme(panel.grid.major = element_line(),
+        legend.position = "none",
+        legend.background = element_blank(),
+        legend.box.background = element_blank(),
+        axis.line = element_line(size = .5, colour = "black", linetype = 1),
+        axis.ticks = element_line(size = .5, colour = "black"),
+        axis.text = element_text(size = 8, colour = "black"),
+        axis.title.x = element_text(size = 8),
+        axis.title.y = element_text(size = 8),
+        legend.text = element_text(size = 8),
+        legend.title = element_text(size = 8),
+        legend.key.size = unit(.8,"line"))
+
+allplots <- ggarrange(d18O, SrCa, ncol = 2, nrow = 1, labels = c("A", "B"), common.legend = TRUE, legend = "bottom")
+
+ggsave("Figures/supplement/Lifelong_niche.png", allplots, width = 15, height = 6, units = "cm", dpi = 600, bg = "white")
+
+png(filename = "Figures/Lifelong_niche_revised.png", 
+    width = 4500, height = 1800, res = 600)
+ggarrange(d18O, SrCa, ncol = 2, nrow = 1, labels = c("A", "B"), common.legend = TRUE,
+                legend = "bottom")
+dev.off()
 ```
 
 ## DTW-cluster analysis
