@@ -4,6 +4,11 @@ author: "TR"
 date: "`r Sys.Date()`"
 output: html_document
 ---
+**This R markdown file contains all relevant analysis steps of the manuscript titled "Ecotype diversification as mechanism for coexistence in extreme environments – the case of northern pike (Esox lucius) in brackish lagoons", including data preparation of elemental transect data, genetics data and growth data (growth data was produced via OtoJ macro of imageJ´s objectJ plugin). Not included are the assignment of element transect data to individual years, raw data preparation of SIMS and LA-ICPMS analysis and plotting of individual-level transects for evaluation of data quality, outliers or vaterite inclusions (indicated by Sr - Mg interaction)**
+
+**All chunks except for the packages chunk have been set to eval = FALSE, all chunks can be run individually**
+
+**Note that this file has not been optimized for any kind of output, if you wish to produce an html or word document, you may need to adapt figure and table outputs manually**
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -44,29 +49,23 @@ options(mc.cores = parallel::detectCores())
 rstan_options(auto_write = TRUE)
 ```
 
-## preparation of Sr and d18O data
+## Notes on preparation of Sr and d18O data
 Five fish excluded: 
 "BH-01701" -> Missplaced transect,
 "BH-01741" -> Vaterite,
 "BH-01908" -> Vaterite,
-"BH-90962" -> Lost,
-"BH-93190" -> no SIMS transect
-## Color codes ecotypes
-"#004643" --> brackish resident,"#00BFB2" --> anadromous,"#F1C40F" --> cross-habitat,"#C5D86D" --> freshwater resident,
-"#AF3800" --> unknown
+"BH-90962" -> Lost during SIMS preprocessing,
+"BH-93190" -> no SIMS transect (lightning strike occured during analysis)
 
 ```{r marry d18O data to Sr data, include=FALSE, eval=FALSE}
-#Read in LA-ICPMS and SIMS data
 rm(list = ls())
 
-LA <- read.delim("Data/Pike/Pike-LA-ICPMS-years_whole-sample_with-TL.txt", 
-                 header = T, stringsAsFactors = F, sep = "\t", dec = ".")
+#Read in LA-ICPMS and SIMS data
+LA <- fread("Data/pike/elements/Pike-LA-ICPMS-years_whole-sample_with-TL.txt")
+d18O <- fread("Data/pike/elements/Pike-d18O-years_whole-sample_with-TL.txt")
 
-d18O <- read.delim("Data/Pike/Pike-d18O-years_whole-sample_with-TL.txt", header = T,
-                stringsAsFactors = F, sep = "\t", dec = ".")
-
-#Clean up data & assign capture locations to main areas
-#Trace element data
+#Clean up data & assign capture locations to larger study areas
+#Clean up Trace element data
 LA_clean <- LA%>%
   filter(LA_dist>=50)%>%
   filter(comment=="OK")%>%
@@ -96,7 +95,7 @@ LA_clean <- LA%>%
             LA_dist = LA_dist,
             lifeyear=lifeyear)
 
-#d18O data
+#Clean up d18O data
 d18O_clean <- d18O%>%
   filter(comment=="OK")%>%
   transmute(fish_ID = fishID,
@@ -123,7 +122,7 @@ d18O_clean <- d18O%>%
 
 LA_clean <- LA_clean %>% drop_na()
 
-#Smooth trace element data to get rid of extreme values
+#Smooth trace element data to remove noise
 LA_smooth <- LA_clean%>%group_by(fish_ID)%>%
   transmute(fish_ID=fish_ID,
             age=age,
@@ -137,12 +136,16 @@ LA_smooth <- LA_clean%>%group_by(fish_ID)%>%
             LA_dist=as.numeric(LA_dist),
             lifeyear=lifeyear)
 
-#Order data for joining
+#Order data sets for joining
 d18O_clean <- d18O_clean[order(d18O_clean$fish_ID),]
 LA_smooth <- LA_smooth[order(LA_smooth$fish_ID),]
 LA_smooth <- data.frame(LA_smooth)
 
-#reinterpolate Sr (higher spatial resolution) to d18O distances (lower spatial resolution) for joining
+#Convert to data frame, so approx (), as approx() behaves weird on data tables
+d18O_clean <- as.data.frame(d18O_clean)
+LA_clean <- as.data.frame(LA_clean)
+
+#reinterpolate Sr (higher spatial resolution ~5.5 um) to d18O distances (lower spatial resolution, ~35 um) before joining
 IDOto <- unique(d18O_clean$fish_ID)
 dfE <- data.frame()
 for (i in 1:length(IDOto)) {
@@ -170,88 +173,33 @@ for (i in 1:length(IDOto)) {
   dfE <- rbind(dfE,df)
 }
 
-otoint_lowres <- cbind(d18O_clean, dfE)
+oto.int <- cbind(d18O_clean, dfE)
 
-write.table(otoint_lowres, file = "Data/Pike/Oto_LA-to-d18O_interpolation.txt", row.names = F, sep = "\t",dec = ".")
+fwrite(oto.int, file = "Data/pike/elements/Oto_LA-to-d18O_interpolation.csv")
 ```
 
-```{r covariance analysis d18O vs Sr, include=FALSE, eval=FALSE}
-#read in data
+```{r covariance analysis d18O vs Sr and data correction, include=FALSE, eval=FALSE}
 rm(list = ls())
 
-otoint_lowres <- read.delim("Data/Pike/Oto_LA-to-d18O_interpolation.txt", 
-                            header = T, stringsAsFactors = F, 
-                            dec = ".", sep = "\t")
+#read in combined element transect data
+oto.int <- fread("Data/pike/elements/Oto_LA-to-d18O_interpolation.csv")
 
-#clean up
-Oto_lowres <- otoint_lowres%>%
-  filter(fish_ID!="BH-01908"&capt!="KD")%>%
-  transmute(ID=fish_ID,
-            capt=capt,
-            area=area,
-            dist=sims_dist,
-            Sr=Sr,
-            d18O=d18O)%>%
+#clean up to remove fish from control lake (but make subset for later join)
+oto.int2 <- oto.int%>%
+  filter(capt!="KD")%>%
   drop_na()
 
-#plot high signal fish
-Testfish1 <- Oto_lowres%>%filter(ID=="BH-90946")
-Testfish2 <- Oto_lowres%>%filter(ID=="BH-91050")
-Testfish3 <- Oto_lowres%>%filter(ID=="BH-90928")
-Testfish4 <- Oto_lowres%>%filter(ID=="BH-01882")
-Testfish5 <- Oto_lowres%>%filter(ID=="BH-01868")
-Testfish6 <- Oto_lowres%>%filter(ID=="BH-01585")
+subset_KD <- subset(oto.int, capt=="KD")
 
-P1 <- ggplot(Testfish1,aes(x=Sr, y=d18O))+
-  geom_point()+
-  labs(x="Sr/Ca (ppt)", y="d18O (permill)", 
-       title="BH-90946, freshwater, likely anadromous")+
-  ylim(-11,-3)+xlim(0,0.007)+
-  theme_minimal()
-P2 <- ggplot(Testfish2,aes(x=Sr, y=d18O))+
-  geom_point()+
-  labs(x="Sr/Ca (ppt)", y="d18O (permill)",
-       title = "BH-91050, freshwater, likely anadromous")+
-  ylim(-11,-3)+xlim(0,0.007)+
-  theme_minimal()
-P3 <- ggplot(Testfish3,aes(x=Sr, y=d18O))+
-  geom_point()+
-  labs(x="Sr/Ca (ppt)", y="d18O (permill)",
-       title = "BH-90928, freshwater, likely anadromous")+
-  ylim(-11,-3)+xlim(0,0.007)+
-  theme_minimal()
-P4 <- ggplot(Testfish4,aes(x=Sr, y=d18O))+
-  geom_point()+
-  labs(x="Sr/Ca (ppt)", y="d18O (permill)",
-       title = "BH-01882, Bodden, likely resident")+
-  ylim(-11,-3)+xlim(0,0.007)+
-  theme_minimal()
-P5 <- ggplot(Testfish5,aes(x=Sr, y=d18O))+
-  geom_point()+
-  labs(x="Sr/Ca (ppt)", y="d18O (permill)",
-       title = "BH-01868, Bodden, likely resident")+
-  ylim(-11,-3)+xlim(0,0.007)+
-  theme_minimal()
-P6 <- ggplot(Testfish6,aes(x=Sr, y=d18O))+
-  geom_point()+
-  labs(x="Sr/Ca (ppt)", y="d18O (permill)",
-       title = "BH-01585, Bodden, likely resident")+
-  ylim(-11,-3)+xlim(0,0.007)+
-  theme_minimal()
-ggarrange(P1,P2,P3,P4,P5,P6)
-
-
-
-png(filename = "Figures/Correlation_d18O~Sr.png", 
-    width = 3000, height = 1800, res = 600)
-ggplot(Oto_lowres,aes(x=Sr*1000, y=d18O))+
+#plot correlation between d18O and Sr
+Correlation.Sr <- ggplot(oto.int2,aes(x=Sr*1000, y=d18O))+
   geom_point(size=.5)+
   scale_x_continuous(breaks = seq(0,8,1))+
   scale_y_continuous(breaks = seq(-15,0,1))+
   labs(x="Sr/Ca (mg/g)", 
        y=expression(bold(delta^18*"O"~("VPDB \u2030"))),
        title=expression(bold("Correlation of intraotolith Sr and"~delta^18*"O")))+
-  stat_smooth(method = "lm", formula = y~exp(-x), fullrange = T, size = .8)+
+  stat_smooth(method = "lm", fullrange = T, size = .8)+
   theme_classic()+
     theme(panel.grid.major = element_line(),
           axis.line = element_line(size = .5, colour = "black", linetype = 1),
@@ -262,71 +210,57 @@ ggplot(Oto_lowres,aes(x=Sr*1000, y=d18O))+
           legend.text = element_text(size = 5),
           legend.title = element_text(size = 10, face = "bold"),
           plot.title = element_text(size = 15, face = "bold", hjust = .5))
-dev.off()
-```
 
-```{r add corrected d18O to data, include=FALSE, eval=FALSE}
-#read in data
-rm(list = ls())
+ggsave("Figures/supplement/Correlation_d18O~Sr.png", Correlation.Sr, width = 15, height = 9, units = "cm", dpi = 600, bg="white")
 
-otoint_lowres <- read.delim("Data/Pike/Oto_LA-to-d18O_interpolation.txt",
-                            header = T, stringsAsFactors = F,
-                            dec = ".", sep = "\t")
+#Test different models
+#linear model
+lm1 <- lm(d18O~Sr, data = oto.int2)
+#exponential decay model
+lm2 <- lm(d18O~exp(-Sr), data = oto.int2)
 
-#Get residuals from d18O ~ Sr
-subset_KD <- subset(otoint_lowres, capt=="KD")
-#subset_KD$res <- NA
-oto_lowres <- otoint_lowres%>%drop_na()%>%filter(capt!="KD")
+#Test models
+anova(lm1, lm2) #exponential decay is not significantly better than a linear model
 
-#0-model
-lm0 <- lm(d18O~1, data = oto_lowres)
-#normal model
-lm1 <- lm(d18O~Sr, data = oto_lowres)
-#exponential decay
-lm2 <- lm(d18O~exp(-Sr), data = oto_lowres)
-
-anova(lm0, lm1)
-anova(lm0, lm2)
-anova(lm1, lm2)
+#summarize final model
 summary(lm1)
 
+#Extract residuals
+oto.int2$res <- lm1$residuals
 
-oto_lowres$res <- lm1$residuals
-
+#fill in scaled values for d18O in pike from control lake
 subset_KD$res <- scale(subset_KD$d18O)
 subset_KD <- subset_KD%>%drop_na()
 
-oto_lowres <- rbind(oto_lowres, subset_KD)
+oto.int3 <- rbind(oto.int2, subset_KD)
 
 #check for pattern retention
-plot(oto_lowres[oto_lowres$fish_ID=="BH-01906",]$sims_dist, oto_lowres[oto_lowres$fish_ID=="BH-01906",]$res, type="l")
+plot(oto.int3[oto.int3$fish_ID=="BH-01906",]$sims_dist, oto.int3[oto.int3$fish_ID=="BH-01906",]$res, type="l")
 
-write.table(oto_lowres, "Data/Pike/Oto_LA-to-d18O_interpolation_with_res.txt", row.names = F, sep = "\t", dec = ".")
+fwrite(oto.int3, "Data/pike/elements/Oto_LA-to-d18O_interpolation_Sr-corrected.csv")
 ```
 
 ```{r average corrected d18O over years, include=FALSE, eval=FALSE}
-#read in data
 rm(list = ls())
 
-otoint_lowres <- read.delim("Data/Pike/Oto_LA-to-d18O_interpolation_with_res.txt",
-                            header = T, stringsAsFactors = F,
-                            dec = ".", sep = "\t")
+#read in data
+oto.int <- fread("Data/pike/elements/Oto_LA-to-d18O_interpolation_Sr-corrected.csv")
 
-#get d18O points per year to average over annual signal
-otoint_lowres$lifeyear <- as.factor(otoint_lowres$lifeyear)
+#Make lifeyear a factor
+oto.int$lifeyear <- as.factor(oto.int$lifeyear)
 
-yearmean <- otoint_lowres%>%group_by(fish_ID,lifeyear)%>%summarise(n=n())
-mean(yearmean$n)
-#mean of 7.8 so smooth with 8
+#calculate average number of d18O points per year
+yearmean <- oto.int%>%group_by(fish_ID,lifeyear)%>%summarise(n=n())
+mean(yearmean$n) #mean of 7.8 --> smoothing data with 7 points rolling mean
 
-oto_lowres <- otoint_lowres%>%
+oto.int2 <- oto.int%>%
   group_by(fish_ID)%>%
   transmute(ID=fish_ID,
             age=age,
             capt=capt,
             area=area,
-            d18O=zoo::rollmean(d18O, k=7, fill = NA, align = "left"),
-            res=zoo::rollmean(res, k=7, fill = NA, align = "left"),
+            d18O=zoo::rollmean(d18O, k=8, fill = NA, align = "left"),
+            res=zoo::rollmean(res, k=8, fill = NA, align = "left"),
             Sr=Sr,
             Na=Na,
             Mg=Mg,
@@ -335,12 +269,13 @@ oto_lowres <- otoint_lowres%>%
             year=lifeyear,
             dist=sims_dist)
 
-#check for pattern smoothness
-plot(oto_lowres[oto_lowres$ID=="BH-01855",]$dist, oto_lowres[oto_lowres$ID=="BH-01855",]$d18O, type="l")
+#check whether smoothing averaged over seasonal d18O signal
+par(mfrow=c(1,2))
+plot(oto.int[oto.int$fish_ID=="BH-01855",]$sims_dist, oto.int[oto.int$fish_ID=="BH-01855",]$d18O, type="l")
+plot(oto.int2[oto.int2$fish_ID=="BH-01855",]$dist, oto.int2[oto.int2$fish_ID=="BH-01855",]$d18O, type="l")
 
 #Save data
-write.table(oto_lowres, "Data/Pike/Oto_LA-to-d18O_interpolation_all_with_res.txt", 
-            row.names = F,dec = ".", sep = "\t")
+fwrite(oto.int2, "Data/pike/elements/Oto_LA-to-d18O_interpolation_Sr-corrected_smooth.csv")
 ```
 
 ## Lifelong niche on population level
