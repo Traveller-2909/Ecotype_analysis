@@ -255,12 +255,12 @@ mean(yearmean$n) #mean of 7.8 --> smoothing data with 7 points rolling mean
 
 oto.int2 <- oto.int%>%
   group_by(fish_ID)%>%
-  transmute(ID=fish_ID,
+  transmute(fish_ID=fish_ID,
             age=age,
             capt=capt,
             area=area,
-            d18O=zoo::rollmean(d18O, k=8, fill = NA, align = "left"),
-            res=zoo::rollmean(res, k=8, fill = NA, align = "left"),
+            d18O=zoo::rollmean(d18O, k=7, fill = NA, align = "left"),
+            res=zoo::rollmean(res, k=7, fill = NA, align = "left"),
             Sr=Sr,
             Na=Na,
             Mg=Mg,
@@ -541,80 +541,51 @@ dev.off()
 ```{r subset data, include=FALSE, eval=FALSE}
 rm(list = ls())
 #read in data
-oto_lowres <- read.delim("Data/Pike/Oto_LA-to-d18O_interpolation_all_with_res.txt",
-                         header = T, dec = ".", sep = "\t",
-                         stringsAsFactors = F)
+oto.int <- fread("Data/pike/elements/Oto_LA-to-d18O_interpolation_Sr-corrected_smooth.csv")
+
+#remove NAs
+oto.int <- na.omit(oto.int)
 
 #subset according to cluster
-Fgroup <- subset(oto_lowres, area=="Freshwater")
-Bgroup <- oto_lowres%>%filter(area=="WRB"|area=="NRB"|area=="GB")
+Fgroup <- subset(oto.int, area=="Freshwater")
+Bgroup <- oto.int%>%filter(area=="WRB"|area=="NRB"|area=="GB")
 
 #Test length, needs to equal N=120
-length(unique(Bgroup$ID))+length(unique(Fgroup$ID))
-
-#Function to reinterpolate an element to a specified length
-interpol <- function(series, length, element){
-  ids <- NULL
-  values <- NULL
-  
-  IDOto <- unique(series$ID)
-  
-  for (i in 1:length(IDOto)) {
-    id <- rep(IDOto[i], length.out=length)
-    value <- approx(series[which(series$ID==IDOto[i]), element],
-                      method = "linear", n=length, rule = 2)[2]
-    ids <- c(ids, id)
-    values <- unlist(c(values, value))
-    }
-  
-  data.frame(ID=ids, value=values)
-  
-}
-
-#Test function
-Srall <- interpol(series = oto_clusters, length = 250, element = "Sr")
-d18Oall <- interpol(series = oto_clusters, length = 250, element = "d18O")
-
-Srd18O <- cbind(Srall, d18Oall[,2])
-colnames(Srd18O) <- c("ID", "Sr", "d18O")
-
-
-#compare pattern retention
-par(mfrow=c(1,2))
-plot(oto_clusters[oto_clusters$ID=="BH-91045",]$dist,
-     oto_clusters[oto_clusters$ID=="BH-91045",]$Sr, type="l",
-     xlab="Distance (um)", ylab="Sr/Ca")
-plot(row_number(Srd18O[Srd18O$ID=="BH-91045",]$ID),
-     Srd18O[Srd18O$ID=="BH-91045",]$Sr, type="l",
-     xlab="transect cell", ylab="Sr/Ca")
+length(unique(Bgroup$fish_ID))+length(unique(Fgroup$fish_ID))
 
 #data package
-save(Fgroup,Bgroup,interpol, file = "Data/Pike/Pike_element_transects.RData")
+fwrite(Fgroup, "Data/pike/clustering/Tributary-sample-transects.csv")
+fwrite(Bgroup, "Data/pike/clustering/Lagoon-sample-transects.csv")
 ```
 
 ```{r dtw data prep, include=FALSE, eval=FALSE}
 rm(list = ls())
+
 #read in data
-load("Data/Pike/Pike_element_transects.RData")
+Fgroup <- fread("Data/pike/clustering/Tributary-sample-transects.csv")
+Bgroup <- fread("Data/pike/clustering/Lagoon-sample-transects.csv")
+
+#load funtions
+source("funcs.R")
 
 #Look for sample size
-length(unique(Bgroup$ID))
-length(unique(Fgroup$ID))
+length(unique(Fgroup$fish_ID))
+length(unique(Bgroup$fish_ID))
 
 #Mean transect length
-summary(count(Bgroup, "ID")) #Median length 34 data points
-summary(count(Fgroup, "ID")) #Median length 38 data points
+median(table(Fgroup$fish_ID)) #Median length 35.5 data points
+median(table(Bgroup$fish_ID)) #Median length 31.5 data points
 
-#Make year a factor
-Bgroup$year <- as.factor(Bgroup$year)
-Fgroup$year <- as.factor(Fgroup$year)
+#Make lifeyear a factor
+Bgroup$lifeyear <- as.factor(Bgroup$year)
+Fgroup$lifeyear <- as.factor(Fgroup$year)
 
 #reinterpolate to standard length (based on medians)
 dataB1 <- interpol(series = Bgroup, length = 35, element = "Sr")
 dataB2 <- interpol(series = Bgroup, length = 35, element = "d18O_res")
 
-dataF1 <- interpol(series = Fgroup, length = 40, element = "Sr")
-dataF2 <- interpol(series = Fgroup, length = 40, element = "d18O_res")
+dataF1 <- interpol(series = Fgroup, length = 35, element = "Sr")
+dataF2 <- interpol(series = Fgroup, length = 35, element = "d18O_res")
 
 dataB <- cbind(dataB1, dataB2[,2])
 dataF <- cbind(dataF1, dataF2[,2])
