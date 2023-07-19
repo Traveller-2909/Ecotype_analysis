@@ -1324,7 +1324,7 @@ dev.off()
 
 ```{r plot ecotypes, include=FALSE, eval=FALSE}
 rm(list=ls())
-load("Data/Pike/Pike_element_transects_hierarchical-clusters.RData")
+load("Data/Pike/clustering/Pike_element_transects_hierarchical-clusters.RData")
 
 Bgroup.clus <- Bgroup%>%inner_join(fishassign_B, by="ID")
 Fgroup.clus <- Fgroup%>%inner_join(fishassign_F, by="ID")
@@ -1351,32 +1351,32 @@ A <- ggplot(allpike_eco[allpike_eco$ecotype=="FW-resident",])+
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
   ylim(0, 8)+
-  scale_y_continuous(breaks = seq(0,8,1), limits = c(0,8))+
+  scale_y_continuous(breaks = seq(0,8,2), limits = c(0,8))+
   xlim(0,2100)+
   labs(y=expression("Sr/Ca (mg/g)"))+
   theme(legend.position = "none", 
         panel.grid.major.y = element_line(size = .3),
         panel.border = element_rect(fill = NA, size = .3),
-        plot.margin = margin(c(20,-15,-10,10)),
+        plot.margin = margin(c(40,-50,-10.5,35.5)),
         axis.text.x = element_text(color = "transparent", size = 7),
-        axis.text.y = element_text(color = "black", size = 7),
+        axis.text.y = element_text(color = "black", size = 24),
         axis.ticks.x = element_line(colour = "transparent"),
         axis.ticks.y = element_line(size = 0.3),
         axis.ticks.length.y = unit(0.05, "cm"),
-        axis.title.y = element_text(size = 7, margin = margin(r=10)),
+        axis.title.y = element_text(size = 24, margin = margin(r=10), vjust = 5),
         axis.title.x = element_blank(),
         axis.line = element_line(size = 0.3))+
   coord_cartesian(clip = "off")+
-  annotation_custom(grob = text_grob(label = "Freshwater resident (N = 27)", size = 7, just = "left"),
+  annotation_custom(grob = text_grob(label = "Freshwater", size = 36, just = "left"),
                     ymin = 9.3, ymax = 9.3, xmin = -50, xmax = -50)+
-  geom_segment(x=-450, y=-0.5, xend=-450, yend=8.5, 
+  geom_segment(x=-380, y=-0.5, xend=-380, yend=8.5, 
                lineend = "butt", linejoin = "mitre",
-               size=2, arrow = arrow(length = unit(0.18, "inches")),
+               size=5, arrow = arrow(length = unit(0.18, "inches")),
                color="darkorange")+
-  annotation_custom(grob = text_grob(label = "increasing salinity", 
-                                     rot = 90, size = 7),
+  annotation_custom(grob = text_grob(label = "salinity", 
+                                     rot = 90, size = 24),
                                      ymin=0, ymax=8,
-                                     xmin=-460, xmax=-460)
+                                     xmin=-390, xmax=-390)
 
 A1 <- ggplot(allpike_eco[allpike_eco$ecotype=="FW-resident",])+
   geom_line(aes(dist, d18O_res, group=ID), color="grey", linewidth=.3, alpha=.8)+
@@ -1385,41 +1385,41 @@ A1 <- ggplot(allpike_eco[allpike_eco$ecotype=="FW-resident",])+
   theme_classic()+
   ylim(-3, 3)+
   xlim(0,2100)+
-  labs(y=expression("scaled"~delta^18*"O"~("VPDB \u2030")))+
+  labs(y=expression("scaled"~delta^18*"O"~("\u2030")))+
   theme(legend.position = "none", 
         panel.grid.major.y = element_line(size = .3),
-        panel.border = element_rect(fill = NA, size = .3),
-        plot.margin = margin(c(10,-15,-5,5.5)),
-        axis.text.x = element_text(color = "black", size = 7),
-        axis.text.y = element_text(color = "black", size = 7),
+        panel.border = element_rect(fill = "transparent", size = .3),
+        plot.margin = margin(c(10,-50,-5,20.5)),
+        axis.text.x = element_text(color = "black", size = 24),
+        axis.text.y = element_text(color = "black", size = 24),
         axis.ticks.y = element_line(size = 0.3),
         axis.ticks.length.y = unit(0.05, "cm"),
-        axis.ticks.x = element_line(size = 0.3),
-        axis.title.y = element_text(size = 7, margin = margin(r=10)),
+        axis.ticks.x = element_line(size = 1),
+        axis.title.y = element_text(size = 24, margin = margin(r=10), vjust = 3),
         axis.title.x = element_blank(),
         axis.line = element_line(size = 0.3))+
   coord_cartesian(clip = "off")+
-    geom_segment(x=-450, y=0, xend=-450, yend=-3.2, 
+    geom_segment(x=-380, y=0, xend=-380, yend=-3.2, 
                lineend = "butt", linejoin = "mitre",
-               size=2, arrow = arrow(length = unit(0.18, "inches")),
+               size=5, arrow = arrow(length = unit(0.18, "inches")),
                color="#FF6666")+
   annotation_custom(grob = text_grob(label = "warmer", 
-                                     rot = 90,, size = 7),
+                                     rot = 90,, size = 24),
                                      ymin=0, ymax=-3,
-                                     xmin=-460, xmax=-460)+
-  geom_segment(x=-450, y=0, xend=-450, yend=3, 
+                                     xmin=-390, xmax=-390)+
+  geom_segment(x=-380, y=0, xend=-380, yend=3, 
                lineend = "butt", linejoin = "mitre",
-               size=2, arrow = arrow(length = unit(0.18, "inches")),
+               size=5, arrow = arrow(length = unit(0.18, "inches")),
                color="#66CCCC")+
   annotation_custom(grob = text_grob(label = "colder", 
-                                     rot = 90, size = 7),
+                                     rot = 90, size = 24),
                                      ymin=0, ymax=3.2,
-                                     xmin=-460, xmax=-460)
+                                     xmin=-410, xmax=-410)
 
 B <- ggplot(allpike_eco[allpike_eco$ecotype=="BW-resident",])+
   geom_line(aes(dist, Sr*1000, group=ID), color="grey", linewidth=.3, alpha=.8)+
   geom_smooth(aes(dist, Sr*1000), color="black", fill=mypalette[1], 
-              alpha=1, size=.3, method = "gam")+
+              alpha=1, size=1, method = "gam")+
   theme_classic()+
   ylim(0, 8)+
   scale_y_continuous(breaks = seq(0,8,1), limits = c(0,8))+
@@ -1428,7 +1428,7 @@ B <- ggplot(allpike_eco[allpike_eco$ecotype=="BW-resident",])+
   theme(legend.position = "none", 
         panel.grid.major.y = element_line(size = .3),
         panel.border = element_rect(fill = NA, size = .3),
-        plot.margin = margin(c(20,-5,-10,-6)),
+        plot.margin = margin(c(40,-15,-10.5, 30)),
         axis.text.x = element_text(color = "transparent", size = 7),
         axis.text.y = element_text(color = "transparent", size = 7),
         axis.ticks.y = element_line(size = 0.3, colour = "transparent"),
@@ -1439,13 +1439,13 @@ B <- ggplot(allpike_eco[allpike_eco$ecotype=="BW-resident",])+
         axis.line = element_line(size = 0.3),
         plot.background = element_blank())+
   coord_cartesian(clip = "off")+
-  annotation_custom(grob = text_grob(label = "Brackish resident (N = 46)", size = 7, just = "left"),
-                    ymin = 9.3, ymax = 9.3, xmin = 100, xmax = 100)
+  annotation_custom(grob = text_grob(label = "Brackish", size = 36, just = "left"),
+                    ymin = 9.5, ymax = 9.5, xmin = 100, xmax = 100)
 
 B1 <- ggplot(allpike_eco[allpike_eco$ecotype=="BW-resident",])+
   geom_line(aes(dist, d18O_res, group=ID), color="grey", linewidth=.3, alpha=.8)+
   geom_smooth(aes(dist, d18O_res), color="black", fill=mypalette[1], 
-              alpha=1, size=.3, method = "gam")+
+              alpha=1, size=1, method = "gam")+
   theme_classic()+
   ylim(-3, 3)+
   xlim(0,2100)+
@@ -1453,12 +1453,12 @@ B1 <- ggplot(allpike_eco[allpike_eco$ecotype=="BW-resident",])+
   theme(legend.position = "none", 
         panel.grid.major.y = element_line(size = .3),
         panel.border = element_rect(fill = NA, size = .3),
-        plot.margin = margin(c(10,-5,-5,-10)),
-        axis.text.x = element_text(color = "black", size = 7),
+        plot.margin = margin(c(10,-15,-5, 25)),
+        axis.text.x = element_text(color = "black", size = 24),
         axis.text.y = element_text(color = "transparent", size = 7),
         axis.ticks.y = element_line(size = 0.3, colour = "transparent"),
         axis.ticks.length.y = unit(0.05, "cm"),
-        axis.ticks.x = element_line(size = 0.3),
+        axis.ticks.x = element_line(size = 1),
         axis.title.y = element_text(size = 7, margin = margin(r=10), colour = "transparent"),
         axis.title.x = element_blank(),
         axis.line = element_line(size = 0.3),
@@ -1468,7 +1468,7 @@ B1 <- ggplot(allpike_eco[allpike_eco$ecotype=="BW-resident",])+
 C <- ggplot(allpike_eco[allpike_eco$ecotype=="Anadromous",])+
   geom_line(aes(dist, Sr*1000, group=ID), color="grey", linewidth=.3, alpha=.8)+
   geom_smooth(aes(dist, Sr*1000), color="black", fill=mypalette[2], 
-              alpha=1, size=.3, method = "gam")+
+              alpha=1, size=1, method = "gam")+
   theme_classic()+
   ylim(0, 8)+
   scale_y_continuous(breaks = seq(0,8,1), limits = c(0,8))+
@@ -1477,7 +1477,7 @@ C <- ggplot(allpike_eco[allpike_eco$ecotype=="Anadromous",])+
   theme(legend.position = "none", 
         panel.grid.major.y = element_line(size = .3),
         panel.border = element_rect(fill = NA, size = .3),
-        plot.margin = margin(c(20,5,-10,-15.5,3.5)),
+        plot.margin = margin(c(40, 15,-10.5,-5)),
         axis.text.x = element_text(color = "transparent", size = 7),
         axis.text.y = element_text(color = "transparent", size = 7),
         axis.ticks.y = element_line(size = 0.3, colour = "transparent"),
@@ -1488,13 +1488,13 @@ C <- ggplot(allpike_eco[allpike_eco$ecotype=="Anadromous",])+
         axis.line = element_line(size = 0.3),
         plot.background = element_blank())+
   coord_cartesian(clip = "off")+
-  annotation_custom(grob = text_grob(label = "Anadromous type (N = 21)", size = 7, just = "left"),
-                    ymin = 9.3, ymax = 9.3, xmin = 100, xmax = 100)
+  annotation_custom(grob = text_grob(label = "Anadromous", size = 36, just = "left"),
+                    ymin = 9.5, ymax = 9.5, xmin = 100, xmax = 100)
 
 C1 <- ggplot(allpike_eco[allpike_eco$ecotype=="Anadromous",])+
   geom_line(aes(dist, d18O_res, group=ID), color="grey", linewidth=.3, alpha=.8)+
   geom_smooth(aes(dist, d18O_res), color="black", fill=mypalette[2], 
-              alpha=1, size=.3, method = "gam")+
+              alpha=1, size=1, method = "gam")+
   theme_classic()+
   ylim(-3, 3)+
   xlim(0,2100)+
@@ -1502,12 +1502,12 @@ C1 <- ggplot(allpike_eco[allpike_eco$ecotype=="Anadromous",])+
   theme(legend.position = "none", 
         panel.grid.major.y = element_line(size = .3),
         panel.border = element_rect(fill = NA, size = .3),
-        plot.margin = margin(c(10,5,-5,-20)),
-        axis.text.x = element_text(color = "black", size = 7),
+        plot.margin = margin(c(10,15,-5,-10)),
+        axis.text.x = element_text(color = "black", size = 24),
         axis.text.y = element_text(color = "transparent", size = 7),
         axis.ticks.y = element_line(size = 0.3, colour = "transparent"),
         axis.ticks.length.y = unit(0.05, "cm"),
-        axis.ticks.x = element_line(size = 0.3),
+        axis.ticks.x = element_line(size = 1),
         axis.title.y = element_text(size = 7, margin = margin(r=10), colour = "transparent"),
         axis.title.x = element_blank(),
         axis.line = element_line(size = 0.3),
@@ -1517,7 +1517,7 @@ C1 <- ggplot(allpike_eco[allpike_eco$ecotype=="Anadromous",])+
 D <- ggplot(allpike_eco[allpike_eco$ecotype=="Trans-habitat",])+
   geom_line(aes(dist, Sr*1000, group=ID), color="grey", linewidth=.3, alpha=.8)+
   geom_smooth(aes(dist, Sr*1000), color="black", fill=mypalette[3], 
-              alpha=1, size=.3, method = "gam")+
+              alpha=1, size=1, method = "gam")+
   theme_classic()+
   ylim(0, 8)+
   scale_y_continuous(breaks = seq(0,8,1), limits = c(0,8))+
@@ -1526,7 +1526,7 @@ D <- ggplot(allpike_eco[allpike_eco$ecotype=="Trans-habitat",])+
   theme(legend.position = "none", 
         panel.grid.major.y = element_line(size = .3),
         panel.border = element_rect(fill = NA, size = .3),
-        plot.margin = margin(c(20,15,-10,-19)),
+        plot.margin = margin(c(40,45,-10.5,-30)),
         axis.text.x = element_text(color = "transparent", size = 7),
         axis.text.y = element_text(color = "transparent", size = 7),
         axis.ticks.y = element_line(size = 0.3, colour = "transparent"),
@@ -1537,13 +1537,13 @@ D <- ggplot(allpike_eco[allpike_eco$ecotype=="Trans-habitat",])+
         axis.title.x = element_blank(),
         plot.background = element_blank())+
   coord_cartesian(clip = "off")+
-  annotation_custom(grob = text_grob(label = "Cross-habitat type (N = 31)", size = 7, just = "left"),
-                    ymin = 9.3, ymax = 9.3, xmin = 100, xmax = 100)
+  annotation_custom(grob = text_grob(label = "Cross-habitat", size = 36, just = "left"),
+                    ymin = 9.5, ymax = 9.5, xmin = 100, xmax = 100)
 
 D1 <- ggplot(allpike_eco[allpike_eco$ecotype=="Trans-habitat",])+
   geom_line(aes(dist, d18O_res, group=ID), color="grey", linewidth=.3, alpha=.8)+
   geom_smooth(aes(dist, d18O_res), color="black", fill=mypalette[3], 
-              alpha=1, size=.3, method = "gam")+
+              alpha=1, size=1, method = "gam")+
   theme_classic()+
   ylim(-3, 3)+
   xlim(0,2100)+
@@ -1551,12 +1551,12 @@ D1 <- ggplot(allpike_eco[allpike_eco$ecotype=="Trans-habitat",])+
   theme(legend.position = "none", 
         panel.grid.major.y = element_line(size = .3),
         panel.border = element_rect(fill = NA, size = .3),
-        plot.margin = margin(c(10,15,-5,-30)),
-        axis.text.x = element_text(color = "black", size = 7),
+        plot.margin = margin(c(10,45,-5,-45)),
+        axis.text.x = element_text(color = "black", size = 24),
         axis.text.y = element_text(color = "transparent", size = 7),
         axis.ticks.y = element_line(size = 0.3, colour = "transparent"),
-        axis.ticks.length.y = unit(0.05, "cm"),
-        axis.ticks.x = element_line(size = 0.3),
+        axis.ticks.length.y = unit(0.2, "cm"),
+        axis.ticks.x = element_line(size = 1),
         axis.title.y = element_text(size = 7, margin = margin(r=10), colour = "transparent"),
         axis.title.x = element_blank(),
         axis.line = element_line(size = 0.3),
@@ -1564,11 +1564,11 @@ D1 <- ggplot(allpike_eco[allpike_eco$ecotype=="Trans-habitat",])+
   coord_cartesian(clip = "off")
 
 
-Transects <- ggarrange(A, B, C, D, A1, B1, C1, D1, labels = c("A", "B", "C", "D"), hjust = c(-3.85,-2.6,-1.2,0.15), vjust = c(2,2,2,2), font.label = list(size=10), nrow = 2, ncol = 4)
+Transects <- ggarrange(A, B, C, D, A1, B1, C1, D1, nrow = 2, ncol = 4)
 
-Transects2 <- annotate_figure(Transects, bottom = text_grob(expression("Distance from Core"~(mu~"m")), vjust = .7, size = 7))
+Transects2 <- annotate_figure(Transects, bottom = text_grob(expression("Distance from Core"~(mu~"m")), vjust = .7, size = 24))
 
-ggsave("Figures/3g_TR_Ecotypes-life-history-transects.png", Transects2, dpi = 600, width = 16, height = 8, units = "cm", bg = "white")
+ggsave("Figures/MS/Ecotypes-life-history-transects_poster.png", Transects2, dpi = 600, width = 45, height = 16, units = "cm", bg = "white")
 ```
 
 ```{r dissimilarity test, include=FALSE, eval=FALSE}
