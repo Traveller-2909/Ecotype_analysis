@@ -1367,7 +1367,7 @@ A <- ggplot(allpike_eco[allpike_eco$ecotype=="FW-resident",])+
         axis.title.x = element_blank(),
         axis.line = element_line(size = 0.3))+
   coord_cartesian(clip = "off")+
-  annotation_custom(grob = text_grob(label = "Freshwater", size = 36, just = "left"),
+  annotation_custom(grob = text_grob(label = "freshwater", size = 36, just = "left"),
                     ymin = 9.3, ymax = 9.3, xmin = -50, xmax = -50)+
   geom_segment(x=-380, y=-0.5, xend=-380, yend=8.5, 
                lineend = "butt", linejoin = "mitre",
@@ -1439,7 +1439,7 @@ B <- ggplot(allpike_eco[allpike_eco$ecotype=="BW-resident",])+
         axis.line = element_line(size = 0.3),
         plot.background = element_blank())+
   coord_cartesian(clip = "off")+
-  annotation_custom(grob = text_grob(label = "Brackish", size = 36, just = "left"),
+  annotation_custom(grob = text_grob(label = "brackish", size = 36, just = "left"),
                     ymin = 9.5, ymax = 9.5, xmin = 100, xmax = 100)
 
 B1 <- ggplot(allpike_eco[allpike_eco$ecotype=="BW-resident",])+
@@ -1488,7 +1488,7 @@ C <- ggplot(allpike_eco[allpike_eco$ecotype=="Anadromous",])+
         axis.line = element_line(size = 0.3),
         plot.background = element_blank())+
   coord_cartesian(clip = "off")+
-  annotation_custom(grob = text_grob(label = "Anadromous", size = 36, just = "left"),
+  annotation_custom(grob = text_grob(label = "anadromous", size = 36, just = "left"),
                     ymin = 9.5, ymax = 9.5, xmin = 100, xmax = 100)
 
 C1 <- ggplot(allpike_eco[allpike_eco$ecotype=="Anadromous",])+
@@ -1537,7 +1537,7 @@ D <- ggplot(allpike_eco[allpike_eco$ecotype=="Trans-habitat",])+
         axis.title.x = element_blank(),
         plot.background = element_blank())+
   coord_cartesian(clip = "off")+
-  annotation_custom(grob = text_grob(label = "Cross-habitat", size = 36, just = "left"),
+  annotation_custom(grob = text_grob(label = "cross-habitat", size = 36, just = "left"),
                     ymin = 9.5, ymax = 9.5, xmin = 100, xmax = 100)
 
 D1 <- ggplot(allpike_eco[allpike_eco$ecotype=="Trans-habitat",])+
@@ -1566,7 +1566,7 @@ D1 <- ggplot(allpike_eco[allpike_eco$ecotype=="Trans-habitat",])+
 
 Transects <- ggarrange(A, B, C, D, A1, B1, C1, D1, nrow = 2, ncol = 4)
 
-Transects2 <- annotate_figure(Transects, bottom = text_grob(expression("Distance from Core"~(mu~"m")), vjust = .7, size = 24))
+Transects2 <- annotate_figure(Transects, bottom = text_grob(expression("distance from core"~(mu~"m")), vjust = .7, size = 24))
 
 ggsave("Figures/MS/Ecotypes-life-history-transects_poster.png", Transects2, dpi = 600, width = 45, height = 16, units = "cm", bg = "white")
 ```
@@ -1694,4 +1694,395 @@ summary <- Series3 %>% summarise(clust=clust,
                       lda.error=mean(clust != jacknife))
 ```
 
+##Age-specific growth
+```{r cluster effect figure, eval=FALSE}
+rm(list = ls())
 
+mypalette1 <- adjustcolor(c("#004643","#00BFB2","#F1C40F","#C5D86D","#AF3800"), alpha.f = 0.6)
+
+pikes2 <- read.delim("Data/pike/growth/Pikedata_model.txt", header = T, 
+                     stringsAsFactors = F, sep = "\t", dec = ".")
+
+pikemodel.final <- lmer(log10(inc_um)~res_mean+lifeyear*ecotype+I(lifeyear^2)+Sr_mean+sex+(1|ID),
+                    REML = T, data = pikes2)
+
+lifeyear <- unique(pikes2$lifeyear)
+ecotype <- unique(pikes2$ecotype)
+res_mean <- seq(min(pikes2$res_mean), max(pikes2$res_mean), 0.1)
+Sr_mean <- seq(min(pikes2$Sr_mean), max(pikes2$res_mean),0.1)
+sex <- unique(pikes2$sex)
+ID <- "NA"
+
+Newdata <- expand.grid(lifeyear=lifeyear, ecotype=ecotype, res_mean=res_mean, Sr_mean=Sr_mean, sex=sex, ID=ID)
+head(Newdata)
+
+Newdata$prediction <- 10^(predict(pikemodel.final, newdata = Newdata, allow.new.levels=TRUE, type="response"))
+
+Newdata2 <- Newdata%>%
+  mutate(keep=case_when(ecotype=="FW_resident"&lifeyear<=max(pikes2[pikes2$ecotype=="FW_resident",]$lifeyear)~1,
+                   ecotype=="Anadromous"&lifeyear<=max(pikes2[pikes2$ecotype=="Anadromous",]$lifeyear)~1,
+                   ecotype=="BW-resident"&lifeyear<=max(pikes2[pikes2$ecotype=="BW-resident",]$lifeyear)~1,
+                   ecotype=="Trans-habitat"&lifeyear<=max(pikes2[pikes2$ecotype=="Trans-habitat",]$lifeyear)~1,
+                   TRUE~0))%>%
+           filter(keep==1)
+
+all_groups <- factor(c(unique(Newdata2$ecotype)))
+
+# Create ggplot with boxplots and custom position dodge 
+
+Agegrowth <- ggplot(Newdata2, aes(factor(lifeyear), prediction, fill=ecotype), alpha=0.6)+
+  geom_boxplot(lwd=.1, outlier.shape = NA, width=.5, position = position_dodge(width = NULL), color="black")+
+  labs(x="Age (years)", y=expression("predicted increment"~(mu*"m")),
+       color="ecotype")+
+  scale_x_discrete(limits=factor(c(1:11)),
+                   breaks=c("1","2","3","4","5","6","7","8","9","10","11"))+
+  scale_fill_manual(breaks = c("BW-resident","Anadromous","Trans-habitat","FW_resident"),
+                    values = mypalette1,
+                    labels = c("brackish resident type", "anadromous type","cross-habitat type", "freshwater resident type"))+
+  scale_fill_manual(breaks = c("BW-resident","Anadromous","Trans-habitat","FW_resident"),
+                    values = mypalette1,
+                    labels = c("brackish resident type", "anadromous type","cross-habitat type", "freshwater resident type"))+
+  theme_classic()+
+  theme(panel.grid.major = element_line(),
+        legend.position = c(.815,.68),
+        legend.background = element_blank(),
+        legend.box.background = element_rect(),
+        axis.line = element_line(size = .5, colour = "black", linetype = 1),
+        axis.ticks = element_line(size = .5, colour = "black"),
+        axis.text.x = element_text(size = 20, colour = "black"),
+        axis.text.y = element_text(size = 20, color = "black"),
+        axis.title.x = element_text(size = 20, color = "black"),
+        axis.title.y = element_text(size = 20, color = "black"),
+        legend.text = element_text(size = 15, color = "black"),
+        legend.title = element_text(size = 20, color = "black"),
+        legend.key.size = unit(2,"line"))
+
+ggsave("Figures/MS/Ecotype-age-specific-growth.png", Agegrowth, width = 22, height = 10, units = "cm", dpi = 600, bg = "white")
+
+png(filename = "Figures/Ecotype_effects_growth_lifelong.png",width = 3000, height = 1500, res = 600)
+dev.off()
+
+ggplot(Newdata2[Newdata$lifeyear<=9,], aes(Sr_mean, prediction, color=as.factor(lifeyear)))+
+  stat_smooth(method = "lm", fill="gray", fullrange = T, lwd=.8)+
+  labs(x=expression(bold("scaled"~delta^18*"O"~("z-score"))), 
+       y=expression(bold("log increment"~(mu*"m"))),
+       color="ageclass")+
+  scale_color_viridis_d()+
+  theme_classic()+
+  theme(panel.grid.major = element_line(),
+        legend.position = c(.9,.9),
+        legend.background = element_blank(),
+        legend.box.background = element_rect(),
+        axis.line = element_line(size = .5, colour = "black", linetype = 1),
+        axis.ticks = element_line(size = .5, colour = "black"),
+        axis.text = element_text(size = 10, colour = "black"),
+        axis.title.x = element_text(size = 10, face = "bold", 
+                                    margin = margin(t=10)),
+        axis.title.y = element_text(size = 10, face = "bold"),
+        legend.text = element_text(size = 5),
+        legend.title = element_text(size = 10, face = "bold"),
+        legend.key.size = unit(.8,"line"))+
+  coord_cartesian(clip = "off")+
+  geom_segment(x=0, y=3.6, xend=2.5, yend=3.6, 
+               lineend = "butt", linejoin = "mitre",
+               size=2, arrow = arrow(length = unit(0.18, "inches")),
+               color="#66CCCC")+
+  annotation_custom(grob = text_grob(label = "cold", 
+                                     rot = 0, face = "bold", size = 10),
+                                     ymin=3.62, ymax=3.62,
+                                     xmin=0, xmax=2.5)+
+  geom_segment(x=0, y=3.6, xend=-2.5, yend=3.6, 
+               lineend = "butt", linejoin = "mitre",
+               size=2, arrow = arrow(length = unit(0.18, "inches")),
+               color="#FF6666")+
+  annotation_custom(grob = text_grob(label = "warm", 
+                                     rot = -0, face = "bold", size = 10),
+                                     ymin=3.62, ymax=3.62,
+                                     xmin=0, xmax=-2.5)
+```
+
+## Lifelong growth
+```{r individual plotting, include=FALSE, eval=FALSE}
+rm(list = ls())
+
+# Ectype codes: 1 = "Brackish resident"; 2 = "Freshwater resident"; 3 = "Anadromous"; 4 = "Cross-habitat"
+fit_gamma_i <- readRDS("Data/pike/growth/fit_gamma_i_final_TR.rds")
+growthdata <- read.delim("Data/Pike/growth/Pikedata_Stan.txt", header = T, stringsAsFactors = F, sep = "\t", dec = ".")
+
+mypallette <- c("#004643","#C5D86D","#00BFB2","#F1C40F")
+mylabel <- c("brackish","freshwater","anadromous","cross-habitat")
+
+Incpredict = function(pars, Agei) pars[1] * (1 - exp(-pars[2] * (Agei - (-pars[3]))))
+
+pl_theme =	theme_classic() +
+  theme(panel.grid.major = element_line(),
+        legend.box.background = element_rect(),
+        axis.line = element_line(size = .5, colour = "black", linetype = 1),
+        axis.ticks = element_line(size = .5, colour = "black"),
+        axis.text = element_text(size = 15, colour = "black"),
+        axis.text.y = element_text(size = 15, color = "black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        legend.text = element_text(size = 5),
+        legend.title = element_text(size = 5, face = "bold"),
+        legend.key.size = unit(.5,"line"),
+        legend.position = c(0.3,0.8),
+        plot.title = element_text(size = 20))
+
+# x is a stanfit
+ecotype_predict = function(x, quants = c(0.5, 0.05, 0.95), names = c("median", "lower", "upper")) {
+	pars_eco = c("LInf_eco", "k_eco", "tZero_eco")
+	samps = as.matrix(x, pars = pars_eco)
+
+	# list of 4 ecotypes
+	# each element is a matrix, 20000 rows (samples) by 15 age increments
+	eco_pr = lapply(0:3, \(i) t(apply(samps[, c(1, 5, 9) + i], 1, Incpredict, Agei = 1:15)))
+
+	# convert to a data table summarizing by quantiles
+	eco_q = lapply(eco_pr, \(x) {
+		res = data.frame(t(apply(x, 2, quantile, quants)))
+		colnames(res) = names
+		res$Agei = 1:15
+		res
+	})
+	rbindlist(eco_q, idcol = "eco_id")
+}
+
+fish_predict = function(x, fish_lookup) {
+	pars_fish = c("LInf_i", "k_i", "tZero_i")
+	samps_f = as.matrix(x, pars = pars_fish)
+	fish_pr = lapply(0:119, \(i) t(apply(samps_f[, c(1, 121, 241) + i], 1, Incpredict, Agei = 1:15)))
+	fish_m = lapply(fish_pr, \(x) data.frame(fit = apply(x, 2, median), Agei = 1:15))
+	fish_plot = rbindlist(fish_m, idcol = "fish_id")	
+	fish_plot$eco_id = fish_lookup$ecotype_num[match(fish_plot$fish_id, fish_lookup$ID2)]
+	fish_plot
+}
+
+ecotype_curves = function(x, dat) {
+	fish_lookup = unique(dat[, c("ID2", "ecotype_num")])
+	fish_lookup = fish_lookup[order(fish_lookup$ID2),]
+	eco_plot = ecotype_predict(x)
+	fish_plot = fish_predict(x, fish_lookup)
+	
+pl_curves = list()
+	for(i in 1:4) {
+		pl_curves[[i]] = ggplot(data = eco_plot[eco_id == i]) + 
+			geom_line(data = fish_plot[eco_id == i], aes(x = Agei, y = fit, group = fish_id), color = "grey", size = 0.5, alpha = 0.5) + 
+			geom_ribbon(aes(x = Agei, ymin = lower, ymax = upper), fill = mypallette[i], alpha = 0.5) + 
+			geom_line(aes(x = Agei, y = median), color = mypallette[i], linewidth = 0.8) + 
+		  ggtitle(mylabel[i])+
+			geom_point(data = dat[dat$ecotype_num == i, ], 
+					   aes(x = lifeyear, y = rad_mm, group = ID), size = 1, alpha = .9, color="black") + 
+		  ylim(0,3.8)+scale_x_continuous(breaks = c(1:15), labels = c(1:15))+
+			pl_theme
+	}
+	pl_curves$nrow = 2
+	do.call(grid.arrange, pl_curves)
+}
+
+Curves1 <- ecotype_curves(fit_gamma_i, growthdata)
+
+Curves2 <- annotate_figure(Curves1, left = text_grob(expression("otolith radius"~(mu~"m")), rot = 90, size = 20),
+                           bottom = text_grob("Age (years)", size = 20))
+
+ggsave("Figures/MS/Individual-growth-curves.png", Curves2, width = 22, height = 10, dpi = 600, units = "cm", bg = "white")
+```
+
+# Genetics
+## Make genetics clusters
+
+```{r genotype data, include=FALSE, eval=FALSE}
+rm(list=ls())
+
+substrRight <- function(x, n){
+  substr(x, nchar(x)-n+1, nchar(x))
+}
+
+geneticsdata <- read.delim("Data/pike/genetics/struct_K4_1_f_clean.txt", sep = "", dec = ".", header = F, stringsAsFactors = F)
+
+#1=Freshwater genotype; 2=Anadromous genotype; 3=Brackish genotype 1; 4=Brackish genotype 2
+
+#Transform assignment probs to numeric
+Data <- geneticsdata%>%
+  transmute(ID=paste0(sub("_","-",substrRight(V2,8))),
+            cluster1=as.numeric(V6),
+            cluster2=as.numeric(V7),
+            cluster3=as.numeric(V8),
+            cluster4=as.numeric(V9))
+  
+#Read in pike behavioral phenotype data
+Otodata <- read.delim("Data/pike/Pikedata.txt", header = T, stringsAsFactors = F, sep = "\t", dec = ".")
+Otoclusters <- Otodata%>%
+  transmute(ID=ID,
+            clust=clust,
+            ecotype=ecotype,
+            waterbody=capt)%>%
+  distinct()
+
+Otogen <- Data%>%left_join(Otoclusters, by="ID")%>%
+  drop_na()
+
+new_df <- Otogen %>%
+  pivot_longer(cols = starts_with("cluster"), 
+               names_to = "cluster", 
+               values_to = "value")
+
+# Reshape the data frame to long format
+df_long <- pivot_longer(Otogen, -c(ID, ecotype, clust, waterbody), names_to = "cluster", values_to = "prob")
+
+# Calculate total probability for each ecotype
+df_total <- aggregate(prob ~ ecotype, df_long, sum)
+
+# Merge total probability with original data frame
+df_long <- merge(df_long, df_total, by = "ecotype")
+
+# Calculate proportion for each cluster and ecotype
+df_long$prop <- df_long$prob.x / df_long$`prob.y`
+
+# Filter data for ecotypes
+df_long2 <- df_long%>%
+  transmute(ecotype=ecotype,
+            ID=ID,
+            clust=clust,
+            waterbody=waterbody,
+            cluster=case_when(cluster=="cluster4"~"brackish 2",
+                              cluster=="cluster3"~"brackish 1",
+                              cluster=="cluster2"~"freshwater",
+                              cluster=="cluster1"~"anadromous"),
+            prob.x=prob.x,
+            prob.y=prob.y,
+            prop=prop)
+
+df_F <- subset(df_long2, ecotype == "FW_resident")
+df_A <- subset(df_long2, ecotype == "Anadromous")
+df_T <- subset(df_long2, ecotype == "Trans-habitat")
+df_B <- subset(df_long2, ecotype == "BW-resident")
+
+pl_theme1 =	theme_classic() +
+	theme(panel.grid.major = element_line(),
+		  legend.box.background = element_rect(),
+		  axis.line = element_line(size = .5, colour = "black", linetype = 1),
+		  axis.ticks = element_line(size = .5, colour = "black"),
+		  axis.text.y = element_text(size = 24, colour = "black"),
+		  axis.text.x = element_text(size = 24, colour = "transparent", angle = 90),
+		  legend.text = element_text(size = 24),
+		  axis.title.x = element_blank(),
+		  axis.title.y = element_blank(),
+		  plot.title = element_text(size = 36, colour = "#0e508c"),
+		  plot.margin = unit(c(1,0,-1.8,1), "cm"),
+		  legend.position = "none")
+
+pl_theme2 =	theme_classic() +
+	theme(panel.grid.major = element_line(),
+		  legend.box.background = element_rect(),
+		  axis.line = element_line(size = .5, colour = "black", linetype = 1),
+		  axis.ticks = element_line(size = .5, colour = "black"),
+		  axis.text.y = element_text(size = 24, colour = "transparent"),
+		  axis.text.x = element_text(size = 24, colour = "transparent", angle = 90),
+		  legend.text = element_text(size = 24),
+		  axis.title.x = element_blank(),
+		  axis.title.y = element_blank(),
+		  plot.title = element_text(size = 36, colour = "#0e508c"),
+		  plot.margin = unit(c(1,1,-1.8,0), "cm"),
+		  legend.position = "none")
+
+pl_theme3 =	theme_classic() +
+	theme(panel.grid.major = element_line(),
+		  legend.box.background = element_rect(),
+		  axis.line = element_line(size = .5, colour = "black", linetype = 1),
+		  axis.ticks = element_line(size = .5, colour = "black"),
+		  axis.text.y = element_text(size = 24, colour = "black"),
+		  axis.text.x = element_text(size = 24, colour = "#e21a1c", angle = 90, vjust = .4),
+		  legend.text = element_text(size = 24),
+		  axis.title.x = element_blank(),
+		  axis.title.y = element_blank(),
+		  plot.title = element_text(size = 36, colour = "#0e508c"),
+		  plot.margin = unit(c(-1.8,0,1,1), "cm"),
+		  legend.position = "none")
+
+pl_theme4 =	theme_classic() +
+	theme(panel.grid.major = element_line(),
+		  legend.box.background = element_rect(),
+		  axis.line = element_line(size = .5, colour = "black", linetype = 1),
+		  axis.ticks = element_line(size = .5, colour = "black"),
+		  axis.text.y = element_text(size = 24, colour = "transparent"),
+		  axis.text.x = element_text(size = 24, colour = "#e21a1c", angle = 90, vjust = .4),
+		  legend.text = element_text(size = 24),
+		  axis.title.x = element_blank(),
+		  axis.title.y = element_blank(),
+		  plot.title = element_text(size = 36, colour = "#0e508c"),
+		  plot.margin = unit(c(-1.8,1,1,0), "cm"),
+		  legend.position = "none")
+
+# Create stacked bar chart with proportions
+FW <- ggplot(df_F, aes(x = cluster, y = prob.x, fill = cluster)) +
+  geom_boxplot()+
+  stat_summary(fun=mean, geom="point", shape=18, size=7, color="red", fill="red")+
+  labs(title = "freshwater", x = "genotype", y = "assignment probability (%)")+
+  ylim(0,1)+
+  scale_fill_manual(values = c("#00BFB2", "#C5D86D", "#F1C40F", "#004643"))+
+  theme_bw()+
+  pl_theme1
+
+Ana <- ggplot(df_B, aes(x = cluster, y = prob.x, fill = cluster)) +
+  geom_boxplot() +
+  stat_summary(fun=mean, geom="point", shape=18, size=7, color="red", fill="red")+
+  labs(title = "brackish", x = "Cluster", y = "Proportion") +
+  ylim(0,1)+
+  scale_fill_manual(values = c("#00BFB2", "#C5D86D", "#F1C40F", "#004643"))+
+  theme_bw()+
+  pl_theme2
+
+Cross <- ggplot(df_A, aes(x = cluster, y = prob.x, fill = cluster)) +
+  geom_boxplot() +
+  stat_summary(fun=mean, geom="point", shape=18, size=7, color="red", fill="red")+
+  labs(title = "anadromous", x = "genotye", y = "assignment probability (%)") +
+  ylim(0,1)+
+  scale_fill_manual(values = c("#00BFB2", "#C5D86D", "#F1C40F", "#004643"))+
+  theme_bw()+
+  pl_theme3
+
+BW <- ggplot(df_T, aes(x = cluster, y = prob.x, fill = cluster)) +
+  geom_boxplot() +
+  stat_summary(fun=mean, geom="point", shape=18, size=7, color="red", fill="red")+
+  labs(title = "cross-habitat", x = "genotype", y = "Proportion") +
+  ylim(0,1)+
+  scale_fill_manual(values = c("#00BFB2", "#C5D86D", "#F1C40F", "#004643"))+
+  theme_bw()+
+  pl_theme4
+
+allplot <- ggarrange(FW, Ana, Cross, BW)
+
+allplot2 <- annotate_figure(allplot, bottom = text_grob("genotype", color = "#e21a1c", size = 36, vjust = -.05), 
+                left = text_grob("probability", color = "black", size = 36, rot = 90, hjust = 0.1))
+
+ggsave("Figures/MS/Phenotype-genotype-match.png", allplot2, width = 24, height = 20, units = "cm", dpi = 600, bg = "white")
+
+#hard assignments
+Otogen$clust <- apply(Otogen[,c(2,3,4,5)], 1, FUN = which.max)
+Otogen$clustval <- apply(Otogen[,c(2,3,4,5)], 1, FUN = max)
+
+Otogen2 <- Otogen%>%
+  mutate(clust2 = case_when(clustval < 0.7 ~ "U",
+                            TRUE~as.character(clust)))
+
+cols <- fread("Data/Pike/Genetics/colors_genotypes.CSV")
+
+chisq.test(table(Otogen2$ecotype, Otogen2$clust2))
+
+Hardclusts <- ggplot(Otogen2, aes(clust2, fill = ecotype))+geom_bar(position = "fill", width = 0.7)+theme_classic()+
+  scale_x_discrete(labels=c("putatively anadromous", "freshwater", "brackish 1", "brackish 2" ,"unknown"))+
+  scale_y_continuous(breaks = seq(0,1,0.2), labels = c("0,0", "0,2", "0,4", "0,6", "0,8", "1,0"))+
+  scale_fill_manual(breaks = c(unique(Otogen2$ecotype)), labels = c("cross-habitat", "anadromous", "freshwater resident", "brackish resident"),
+                    values = c("#F1C40F", "#00BFB2", "#C5D86D", "#004643"))+
+  theme(axis.line = element_line(size = .5, colour = "black", linetype = 1),
+		  axis.ticks = element_line(size = .5, colour = "black"),
+		  axis.text.y = element_text(size = 10, colour = "black"),
+		  axis.text.x = element_text(size = 10, colour = "black"),
+		  legend.text = element_text(size = 10))+
+  labs(x="genotype", y="proportion", fill="ecotype")
+
+png(filename = "Figures/Genotypes/Ecotypes_genetic_clusters_assigned.png", width = 5000, height = 3000, res = 600)
+Hardclusts
+dev.off()
+```
