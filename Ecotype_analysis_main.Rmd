@@ -2701,7 +2701,7 @@ Ecocurves3 <- annotate_figure(Ecocurves2,
                               bottom = text_grob("Age (years)", rot = 0, size = 20), 
                               left = text_grob(expression("otolith radius"~(mu~"m")), rot = 90, size = 20))
 
-ggsave("Figures/MS/Individual_growth_revised.png", Ecocurves3, width = 15, height = 15, units = "cm", dpi = 600, bg = "white")
+ggsave("Figures/MS/Individual_growth_revised.pdf", Ecocurves3, width = 15, height = 15, units = "cm", dpi = 600, bg = "white")
 ```
 
 ```{r individual Growth analysis evaluation, include=FALSE, eval=FALSE}
