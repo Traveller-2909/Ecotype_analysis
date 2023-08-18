@@ -49,15 +49,15 @@ options(mc.cores = parallel::detectCores())
 rstan_options(auto_write = TRUE)
 ```
 
-# Notes on preparation of Sr and d18O data
+# Life history phenotypes
+## Data prep for niche analysis
+### Notes on preparation of Sr and d18O data
 Five fish excluded: 
 "BH-01701" -> Misplaced transect,
 "BH-01741" -> Vaterite,
 "BH-01908" -> Vaterite,
 "BH-90962" -> Lost during SIMS preprocessing,
 "BH-93190" -> no SIMS transect (lightning strike occurred during analysis)
-
-#Data prep for niche analysis
 ```{r marry d18O data to Sr data, include=FALSE, eval=FALSE}
 rm(list = ls())
 
@@ -278,8 +278,6 @@ plot(oto.int2[oto.int2$fish_ID=="BH-01855",]$dist, oto.int2[oto.int2$fish_ID=="B
 #Save data
 fwrite(oto.int2, "Data/pike/elements/Oto_LA-to-d18O_interpolation_Sr-corrected_smooth.csv")
 ```
-
-# Life history phenotypes
 ## Lifelong niche (individual and population level)
 ```{r calculate profile plots for individuals, include=FALSE, eval=FALSE}
 rm(list = ls())
@@ -1978,121 +1976,8 @@ pairwise.perm.manova(Genetics, Otogen2$ecotype, test = c("Pillai", "Wilks",
   progress = TRUE, p.method = "fdr", F = FALSE, R2 = FALSE)
 ```
 
-##Growth analysis of genotypes
-```{r mixed modelling growth genotypes, include=FALSE, eval=FALSE}
-rm(list = ls())
-
-pikes <- fread("Data/pike/growth/Pikedata_model.csv")
-
-
-
-pikemodel.1 <- lmer(log10(inc_um)~res_mean+lifeyear*genotype+I(lifeyear^2)+Sr_mean+sex+(1|ID),
-                    REML = F, data = pikenomics)
-
-#explore
-boxplot(pikenomics$inc_um~pikenomics$genotype, ylab ="growth increment", xlab = "genotype")
-
-#VIF
-pike.vif <- vif(pikemodel.1)
-
-barplot(pike.vif[,3], main = "VIF values", horiz = F, col = "darkgreen", ylim = c(0,6),
-        las = 2)
-abline(h = 5, lwd = 3, lty = 2, col="red")
-
-#Model effects
-rand(pikemodel.1)
-
-#Genotype effect
-pikemodel_nogen <- lmer(log10(inc_um)~res_mean+lifeyear+I(lifeyear^2)+Sr_mean+sex+(1|ID),
-                    REML = F, data = pikenomics)
-
-anova(pikemodel.1, pikemodel_nogen)
-
-#eval
-#make residuals
-pikenomics$resid <- resid(pikemodel.1)
-
-#resid vs fitted
-plot(pikemodel.1, xlab = "Fitted", ylab = "Residuals")
-
-#reidual distribution
-hist(pikenomics$resid, main = "", xlab = "Residuals")
-
-#residuals normal?
-qqnorm(resid(pikemodel.1))
-qqline(resid(pikemodel.1))
-
-#specific genotype residuals
-plot(pikenomics$resid~pikenomics$genotype, ylab = "Residuals", xlab = "", las = 2)
-
-r.squaredGLMM(pikemodel.1)
-summary(pikemodel.1)
-tab_model(pikemodel.1, show.fstat = T, show.loglik = T, digits.re = 20, show.re.var = T)
-sd(resid(pikemodel.1))
-```
-
-```{r genotype effect figure, eval=FALSE}
-mypalette1 <- adjustcolor(c("#004643","#00BFB2","#F1C40F","#C5D86D","#AF3800"), alpha.f = 0.6)
-
-pikes2 <- pikenomics
-
-pikemodel.final <- lmer(log10(inc_um)~res_mean+lifeyear*genotype+I(lifeyear^2)+Sr_mean+sex+(1|ID),
-                    REML = T, data = pikenomics)
-
-lifeyear <- unique(pikes2$lifeyear)
-genotype <- unique(pikes2$genotype)
-res_mean <- seq(min(pikes2$res_mean), max(pikes2$res_mean), 0.1)
-Sr_mean <- seq(min(pikes2$Sr_mean), max(pikes2$res_mean),0.1)
-sex <- unique(pikes2$sex)
-ID <- "NA"
-
-Newdata <- expand.grid(lifeyear=lifeyear, genotype=genotype, res_mean=res_mean, Sr_mean=Sr_mean, sex=sex, ID=ID)
-head(Newdata)
-
-Newdata$prediction <- 10^(predict(pikemodel.final, newdata = Newdata, allow.new.levels=TRUE, type="response"))
-
-Newdata2 <- Newdata%>%
-  mutate(keep=case_when(genotype=="1"&lifeyear<=max(pikes2[pikes2$genotype=="1",]$lifeyear)~1,
-                   genotype=="2"&lifeyear<=max(pikes2[pikes2$genotype=="2",]$lifeyear)~1,
-                   genotype=="3"&lifeyear<=max(pikes2[pikes2$genotype=="3",]$lifeyear)~1,
-                   genotype=="U"&lifeyear<=max(pikes2[pikes2$genotype=="U",]$lifeyear)~1,
-                   TRUE~0))%>%
-           filter(keep==1)
-
-Newdata2$genotype <- fct_relevel(Newdata2$genotype, "1", "3", "2", "U")
-
-# Create ggplot with boxplots and custom position dodge 
-
-Ecogrowth <- ggplot(Newdata2, aes(factor(lifeyear), prediction, fill=genotype), alpha=0.6)+
-  geom_boxplot(lwd=.5, outlier.shape = NA, width=.6, position = position_dodge(width = NULL), color="black")+
-  labs(x="Age (years)", y=expression("predicted increment"~(mu*"m")),
-       fill="putative genotype")+
-  scale_x_discrete(limits=factor(c(1:11)),
-                   breaks=c("1","2","3","4","5","6","7","8","9","10","11"))+
-  scale_fill_manual(breaks = c("1","3","2","U"),
-                    values = c("#C5D86D","#00BFB2","#F1C40F","#004643"),
-                    labels = c("freshwater", "anadromous","brackish", "unassigned"))+
-  theme_classic()+
-  theme(panel.grid.major = element_line(),
-        legend.position = c(.715,.79),
-        legend.background = element_blank(),
-        legend.box.background = element_rect(),
-        axis.line = element_line(linewidth = 1, colour = "black", linetype = 1),
-        axis.ticks = element_line(linewidth = 1, colour = "black"),
-        axis.text = element_text(size = 30, colour = "black"),
-        axis.text.y = element_text(size = 30, colour = "black"),
-        axis.title.x = element_text(size = 30, colour = "black"),
-        axis.title.y = element_text(size = 30, colour = "black"),
-        legend.text = element_text(size = 30, colour = "black"),
-        legend.title = element_text(size = 30, colour = "black"),
-        legend.key.size = unit(2.5,"line"))
-
-ggsave("Figures/MS/Genotype-effects-growth.png", Ecogrowth, width = 16, height = 8, dpi = 600, bg = "white")
-```
-
-
-## Growth analysis of life history phenotypes and genotype
-### Age-specific growth
+# Growth analysis of life history phenotypes and genotype
+## Age-specific growth
 ```{r get clean increment growth data, include=FALSE, eval=FALSE}
 
 rm(list = ls())
@@ -2692,7 +2577,7 @@ Ecogrowth <- ggplot(Newdata2, aes(factor(lifeyear), prediction, fill=phenotype),
 ggsave("Figures/MS/Ecotype-effects-growth.png", Ecogrowth, width = 16, height = 8, dpi = 600, bg = "white")
 ```
 
-### Lifelong growth
+## Lifelong growth
 ```{r data prep for VB modelling, include=FALSE, eval=FALSE}
 rm(list = ls())
 
