@@ -771,11 +771,11 @@ agebreaks.label <- as.character(seq(1,11,1))
 
 
 # Generate a color ramp between two colors
-mypallette <- c(colorRampPalette(c("#004643", "#F1C40F"))(4))
+mypallette <- c(colorRampPalette(c("#C5D86D", "#00BFB2", "#F1C40F"))(6))
 
 A <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW low saline|cold",])+
   geom_line(aes(dist, Sr*1000, group=ID), color="grey", linewidth=.3, alpha=.8)+
-  geom_smooth(aes(dist, Sr*1000), color="black", fill=mypallette[4], 
+  geom_smooth(aes(dist, Sr*1000), color="black", fill=mypallette[1], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
   ylim(0, 8)+
@@ -787,28 +787,28 @@ A <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW low saline|cold",])+
         panel.border = element_rect(fill = NA, size = .3),
         plot.margin = margin(c(20,-15,-10,10)),
         axis.text.x = element_text(color = "transparent", size = 7),
-        axis.text.y = element_text(color = "black", size = 7),
+        axis.text.y = element_text(color = "black", size = 10),
         axis.ticks.x = element_line(colour = "transparent"),
         axis.ticks.y = element_line(size = 0.3),
         axis.ticks.length.y = unit(0.05, "cm"),
-        axis.title.y = element_text(size = 7, margin = margin(r=10)),
+        axis.title.y = element_text(size = 10, margin = margin(r=10)),
         axis.title.x = element_blank(),
         axis.line = element_line(size = 0.3))+
   coord_cartesian(clip = "off")+
   annotation_custom(grob = text_grob(label = "FW low saline|cold (N = 4)", size = 7, just = "left"),
-                    ymin = 9.3, ymax = 9.3, xmin = -50, xmax = -50)+
+                    ymin = 9, ymax = 9, xmin = -50, xmax = -50)+
   geom_segment(x=-450, y=-0.5, xend=-450, yend=8.5, 
                lineend = "butt", linejoin = "mitre",
                size=2, arrow = arrow(length = unit(0.18, "inches")),
                color="darkorange")+
   annotation_custom(grob = text_grob(label = "increasing salinity", 
-                                     rot = 90, size = 7),
+                                     rot = 90, size = 10),
                                      ymin=0, ymax=8,
                                      xmin=-460, xmax=-460)
 
 A1 <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW low saline|cold",])+
   geom_line(aes(dist, d18O_res, group=ID), color="grey", linewidth=.3, alpha=.8)+
-  geom_smooth(aes(dist, d18O_res), color="black", fill=mypallette[4], 
+  geom_smooth(aes(dist, d18O_res), color="black", fill=mypallette[1], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
   ylim(-3, 3)+
@@ -818,12 +818,12 @@ A1 <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW low saline|cold",])+
         panel.grid.major.y = element_line(size = .3),
         panel.border = element_rect(fill = NA, size = .3),
         plot.margin = margin(c(10,-15,-5,5.5)),
-        axis.text.x = element_text(color = "black", size = 7),
-        axis.text.y = element_text(color = "black", size = 7),
+        axis.text.x = element_text(color = "black", size = 8),
+        axis.text.y = element_text(color = "black", size = 8),
         axis.ticks.y = element_line(size = 0.3),
         axis.ticks.length.y = unit(0.05, "cm"),
         axis.ticks.x = element_line(size = 0.3),
-        axis.title.y = element_text(size = 7, margin = margin(r=10)),
+        axis.title.y = element_text(size = 10, margin = margin(r=10)),
         axis.title.x = element_blank(),
         axis.line = element_line(size = 0.3))+
   coord_cartesian(clip = "off")+
@@ -832,7 +832,7 @@ A1 <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW low saline|cold",])+
                size=2, arrow = arrow(length = unit(0.18, "inches")),
                color="#FF6666")+
   annotation_custom(grob = text_grob(label = "warmer", 
-                                     rot = 90,, size = 7),
+                                     rot = 90,, size = 10),
                                      ymin=0, ymax=-3,
                                      xmin=-460, xmax=-460)+
   geom_segment(x=-450, y=0, xend=-450, yend=3, 
@@ -840,13 +840,13 @@ A1 <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW low saline|cold",])+
                size=2, arrow = arrow(length = unit(0.18, "inches")),
                color="#66CCCC")+
   annotation_custom(grob = text_grob(label = "colder", 
-                                     rot = 90, size = 7),
+                                     rot = 90, size = 10),
                                      ymin=0, ymax=3.2,
                                      xmin=-460, xmax=-460)
 
 B <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW low saline|shift",])+
   geom_line(aes(dist, Sr*1000, group=ID), color="grey", linewidth=.3, alpha=.8)+
-  geom_smooth(aes(dist, Sr*1000), color="black", fill=mypallette[1], 
+  geom_smooth(aes(dist, Sr*1000), color="black", fill=mypallette[2], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
   ylim(0, 8)+
@@ -868,11 +868,11 @@ B <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW low saline|shift",])+
         plot.background = element_blank())+
   coord_cartesian(clip = "off")+
   annotation_custom(grob = text_grob(label = "FW low saline|shift (N = 9)", size = 7, just = "left"),
-                    ymin = 9.3, ymax = 9.3, xmin = 100, xmax = 100)
+                    ymin = 9, ymax = 9, xmin = 100, xmax = 100)
 
 B1 <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW low saline|shift",])+
   geom_line(aes(dist, d18O_res, group=ID), color="grey", linewidth=.3, alpha=.8)+
-  geom_smooth(aes(dist, d18O_res), color="black", fill=mypallette[1], 
+  geom_smooth(aes(dist, d18O_res), color="black", fill=mypallette[2], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
   ylim(-3, 3)+
@@ -882,7 +882,7 @@ B1 <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW low saline|shift",])+
         panel.grid.major.y = element_line(size = .3),
         panel.border = element_rect(fill = NA, size = .3),
         plot.margin = margin(c(10,-5,-5,-10)),
-        axis.text.x = element_text(color = "black", size = 7),
+        axis.text.x = element_text(color = "black", size = 8),
         axis.text.y = element_text(color = "transparent", size = 7),
         axis.ticks.y = element_line(size = 0.3, colour = "transparent"),
         axis.ticks.length.y = unit(0.05, "cm"),
@@ -895,7 +895,7 @@ B1 <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW low saline|shift",])+
 
 C <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW int saline|const",])+
   geom_line(aes(dist, Sr*1000, group=ID), color="grey", linewidth=.3, alpha=.8)+
-  geom_smooth(aes(dist, Sr*1000), color="black", fill=mypallette[2], 
+  geom_smooth(aes(dist, Sr*1000), color="black", fill=mypallette[3], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
   ylim(0, 8)+
@@ -917,11 +917,11 @@ C <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW int saline|const",])+
         plot.background = element_blank())+
   coord_cartesian(clip = "off")+
   annotation_custom(grob = text_grob(label = "FW int saline|const (N = 14)", size = 7, just = "left"),
-                    ymin = 9.3, ymax = 9.3, xmin = 100, xmax = 100)
+                    ymin = 9, ymax = 9, xmin = 100, xmax = 100)
 
 C1 <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW int saline|const",])+
   geom_line(aes(dist, d18O_res, group=ID), color="grey", linewidth=.3, alpha=.8)+
-  geom_smooth(aes(dist, d18O_res), color="black", fill=mypallette[2], 
+  geom_smooth(aes(dist, d18O_res), color="black", fill=mypallette[3], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
   ylim(-3, 3)+
@@ -931,7 +931,7 @@ C1 <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW int saline|const",])+
         panel.grid.major.y = element_line(size = .3),
         panel.border = element_rect(fill = NA, size = .3),
         plot.margin = margin(c(10,5,-5,-20.5)),
-        axis.text.x = element_text(color = "black", size = 7),
+        axis.text.x = element_text(color = "black", size = 8),
         axis.text.y = element_text(color = "transparent", size = 7),
         axis.ticks.y = element_line(size = 0.3, colour = "transparent"),
         axis.ticks.length.y = unit(0.05, "cm"),
@@ -944,7 +944,7 @@ C1 <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW int saline|const",])+
 
 D <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW int saline|shift",])+
   geom_line(aes(dist, Sr*1000, group=ID), color="grey", linewidth=.3, alpha=.8)+
-  geom_smooth(aes(dist, Sr*1000), color="black", fill=mypallette[3], 
+  geom_smooth(aes(dist, Sr*1000), color="black", fill=mypallette[4], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
   ylim(0, 8)+
@@ -966,11 +966,11 @@ D <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW int saline|shift",])+
         plot.background = element_blank())+
   coord_cartesian(clip = "off")+
   annotation_custom(grob = text_grob(label = "FW int saline|shift (N = 7)", size = 7, just = "left"),
-                    ymin = 9.3, ymax = 9.3, xmin = 100, xmax = 100)
+                    ymin = 9, ymax = 9, xmin = 100, xmax = 100)
 
 D1 <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW int saline|shift",])+
   geom_line(aes(dist, d18O_res, group=ID), color="grey", linewidth=.3, alpha=.8)+
-  geom_smooth(aes(dist, d18O_res), color="black", fill=mypallette[3], 
+  geom_smooth(aes(dist, d18O_res), color="black", fill=mypallette[4], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
   ylim(-3, 3)+
@@ -980,7 +980,7 @@ D1 <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW int saline|shift",])+
         panel.grid.major.y = element_line(size = .3),
         panel.border = element_rect(fill = NA, size = .3),
         plot.margin = margin(c(10,15,-5,-31)),
-        axis.text.x = element_text(color = "black", size = 7),
+        axis.text.x = element_text(color = "black", size = 8),
         axis.text.y = element_text(color = "transparent", size = 7),
         axis.ticks.y = element_line(size = 0.3, colour = "transparent"),
         axis.ticks.length.y = unit(0.05, "cm"),
@@ -993,7 +993,7 @@ D1 <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW int saline|shift",])+
 
 E <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW high saline|shift",])+
   geom_line(aes(dist, Sr*1000, group=ID), color="grey", linewidth=.3, alpha=.8)+
-  geom_smooth(aes(dist, Sr*1000), color="black", fill=mypallette[3], 
+  geom_smooth(aes(dist, Sr*1000), color="black", fill=mypallette[5], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
   ylim(0, 8)+
@@ -1015,11 +1015,11 @@ E <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW high saline|shift",])+
         plot.background = element_blank())+
   coord_cartesian(clip = "off")+
   annotation_custom(grob = text_grob(label = "FW high saline|shift (N = 9)", size = 7, just = "left"),
-                    ymin = 9.3, ymax = 9.3, xmin = 100, xmax = 100)
+                    ymin = 9, ymax = 9, xmin = 100, xmax = 100)
 
 E1 <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW high saline|shift",])+
   geom_line(aes(dist, d18O_res, group=ID), color="grey", linewidth=.3, alpha=.8)+
-  geom_smooth(aes(dist, d18O_res), color="black", fill=mypallette[3], 
+  geom_smooth(aes(dist, d18O_res), color="black", fill=mypallette[5], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
   ylim(-3, 3)+
@@ -1029,7 +1029,7 @@ E1 <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW high saline|shift",])+
         panel.grid.major.y = element_line(size = .3),
         panel.border = element_rect(fill = NA, size = .3),
         plot.margin = margin(c(10,25,-5,-41.5)),
-        axis.text.x = element_text(color = "black", size = 7),
+        axis.text.x = element_text(color = "black", size = 8),
         axis.text.y = element_text(color = "transparent", size = 7),
         axis.ticks.y = element_line(size = 0.3, colour = "transparent"),
         axis.ticks.length.y = unit(0.05, "cm"),
@@ -1042,7 +1042,7 @@ E1 <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW high saline|shift",])+
 
 F1 <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW high saline|const",])+
   geom_line(aes(dist, Sr*1000, group=ID), color="grey", linewidth=.3, alpha=.8)+
-  geom_smooth(aes(dist, Sr*1000), color="black", fill=mypallette[3], 
+  geom_smooth(aes(dist, Sr*1000), color="black", fill=mypallette[6], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
   ylim(0, 8)+
@@ -1064,11 +1064,11 @@ F1 <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW high saline|const",])+
         plot.background = element_blank())+
   coord_cartesian(clip = "off")+
   annotation_custom(grob = text_grob(label = "FW high saline|const (N = 11)", size = 7, just = "left"),
-                    ymin = 9.3, ymax = 9.3, xmin = 100, xmax = 100)
+                    ymin = 9, ymax = 9, xmin = 100, xmax = 100)
 
 F2 <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW high saline|const",])+
   geom_line(aes(dist, d18O_res, group=ID), color="grey", linewidth=.3, alpha=.8)+
-  geom_smooth(aes(dist, d18O_res), color="black", fill=mypallette[3], 
+  geom_smooth(aes(dist, d18O_res), color="black", fill=mypallette[6], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
   ylim(-3, 3)+
@@ -1078,7 +1078,7 @@ F2 <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW high saline|const",])+
         panel.grid.major.y = element_line(size = .3),
         panel.border = element_rect(fill = NA, size = .3),
         plot.margin = margin(c(10,35,-5,-51.5)),
-        axis.text.x = element_text(color = "black", size = 7),
+        axis.text.x = element_text(color = "black", size = 8),
         axis.text.y = element_text(color = "transparent", size = 7),
         axis.ticks.y = element_line(size = 0.3, colour = "transparent"),
         axis.ticks.length.y = unit(0.05, "cm"),
@@ -1093,9 +1093,9 @@ Transects <- ggarrange(A, B, C, D, E, F1, A1, B1, C1, D1, E1, F2, labels = c("A"
                        hjust = c(-3.85,-2.6,-1.2,0.2,1.6,3.4), vjust = c(2,2,2,2,2), 
                        font.label = list(size=10), nrow = 2, ncol = 6)
 
-Transects2 <- annotate_figure(Transects, bottom = text_grob(expression("Distance from Core"~(mu~"m")), vjust = 1, size = 7))
+Transects2 <- annotate_figure(Transects, bottom = text_grob(expression("Distance from Core"~(mu~"m")), vjust = 1, size = 10))
 
-ggsave("Figures/supplement/FW-clusters-life-history-transects.png", Transects2, dpi = 600, width = 24, height = 8, units = "cm", bg = "white")
+ggsave("Figures/supplement/FW-clusters-life-history-transects.png", Transects2, dpi = 600, width = 24, height = 12, units = "cm", bg = "white")
 ```
 
 ```{r plot lagoon clusters, include=FALSE, eval=FALSE}
@@ -1192,7 +1192,7 @@ A1 <- ggplot(Bgroup.clus[Bgroup.clus$clust2=="BW Low saline|shift",])+
 
 B <- ggplot(Bgroup.clus[Bgroup.clus$clust2=="BW int saline|cold",])+
   geom_line(aes(dist, Sr*1000, group=ID), color="grey", linewidth=.3, alpha=.8)+
-  geom_smooth(aes(dist, Sr*1000), color="black", fill=mypallette[1], 
+  geom_smooth(aes(dist, Sr*1000), color="black", fill=mypallette[3], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
   ylim(0, 8)+
@@ -1218,7 +1218,7 @@ B <- ggplot(Bgroup.clus[Bgroup.clus$clust2=="BW int saline|cold",])+
 
 B1 <- ggplot(Bgroup.clus[Bgroup.clus$clust2=="BW int saline|cold",])+
   geom_line(aes(dist, d18O_res, group=ID), color="grey", linewidth=.3, alpha=.8)+
-  geom_smooth(aes(dist, d18O_res), color="black", fill=mypallette[1], 
+  geom_smooth(aes(dist, d18O_res), color="black", fill=mypallette[3], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
   ylim(-3, 3)+
@@ -1290,7 +1290,7 @@ C1 <- ggplot(Bgroup.clus[Bgroup.clus$clust2=="BW high saline|warm",])+
 
 D <- ggplot(Bgroup.clus[Bgroup.clus$clust2=="BW high saline|cold",])+
   geom_line(aes(dist, Sr*1000, group=ID), color="grey", linewidth=.3, alpha=.8)+
-  geom_smooth(aes(dist, Sr*1000), color="black", fill=mypallette[3], 
+  geom_smooth(aes(dist, Sr*1000), color="black", fill=mypallette[1], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
   ylim(0, 8)+
@@ -1316,7 +1316,7 @@ D <- ggplot(Bgroup.clus[Bgroup.clus$clust2=="BW high saline|cold",])+
 
 D1 <- ggplot(Bgroup.clus[Bgroup.clus$clust2=="BW high saline|cold",])+
   geom_line(aes(dist, d18O_res, group=ID), color="grey", linewidth=.3, alpha=.8)+
-  geom_smooth(aes(dist, d18O_res), color="black", fill=mypallette[3], 
+  geom_smooth(aes(dist, d18O_res), color="black", fill=mypallette[1], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
   ylim(-3, 3)+
@@ -1908,6 +1908,7 @@ Otoclusters <- Otodata%>%
   transmute(ID=ID,
             clust=clust,
             ecotype=ecotype,
+            area=waterbody,
             waterbody=capt)%>%
   distinct()
 
@@ -1929,7 +1930,7 @@ fwrite(Otogen2, file = "Data/pike/genetics/discrete-cluster-assignment.csv")
 chisq.test(table(Otogen2$ecotype, Otogen2$hardclust))
 
 #Test if genotype is predicted by capture location
-chisq.test(table(Otogen2$waterbody, Otogen2$hardclust))
+chisq.test(table(Otogen2$area, Otogen2$hardclust))
 
 #Figure for hard assignments
 Hardclusts <- ggplot(Otogen2, aes(hardclust, fill = ecotype))+geom_bar(position = "fill", width = 0.7)+theme_classic()+
@@ -2266,7 +2267,7 @@ genotype_only <- genotypes%>%
             genotype=hardclust)
 
 pikes3 <- pikes2%>%
-  inner_join(genotype_only, by = "ID")
+  left_join(genotype_only, by = "ID")
 
 fwrite(pikes3, "Data/pike/growth/Pikedata_model.csv")
 
@@ -2357,33 +2358,46 @@ pikemodel.noage <- update(pikemodel.1, ~.-I(lifeyear^2))
 anova(pikemodel.1, pikemodel.noage)
 #age is significant
 
-#Test life history phenotype effect (interaction term)
-pikemodel.nopheno <- update(pikemodel.1, ~.-lifeyear*phenotype)
-
-anova(pikemodel.1, pikemodel.nopheno)
-#age*phenotype is significant
-
 #test genotype effect
 pikemodel.nogen <- update(pikemodel.1, ~.-lifeyear*genotype)
 
 anova(pikemodel.1, pikemodel.nogen)
 
-#Test thermal effects
-pikemodel.nores <- update(pikemodel.1, ~.-res_mean)
+#New model without genotype
+pikemodel.1.1 <- lmer(log10(inc_um)~res_mean+lifeyear*phenotype+I(lifeyear^2)+Sr_mean+sex+(1|ID),
+                    REML = F, data = pikes2)
 
-anova(pikemodel.1, pikemodel.nores)
+#Test random effects
+rand(pikemodel.1.1)
+#random effect is significant
+
+#Test age effect
+pikemodel.noage <- update(pikemodel.1.1, ~.-I(lifeyear^2))
+
+anova(pikemodel.1.1, pikemodel.noage)
+
+#Test life history phenotype effect (interaction term)
+pikemodel.nopheno <- update(pikemodel.1.1, ~.-lifeyear*phenotype)
+
+anova(pikemodel.1.1, pikemodel.nopheno)
+#age*phenotype is significant
+
+#Test thermal effects
+pikemodel.nores <- update(pikemodel.1.1, ~.-res_mean)
+
+anova(pikemodel.1.1, pikemodel.nores)
 #relative d18O (thermal proxy) significant
 
 #Test salinity effects
-pikemodel.noSr <- update(pikemodel.1, ~.-Sr_mean)
+pikemodel.noSr <- update(pikemodel.1.1, ~.-Sr_mean)
 
-anova(pikemodel.1, pikemodel.noSr)
+anova(pikemodel.1.1, pikemodel.noSr)
 #Salinity (Sr:Ca) significant
 
 #Test sex effects
-pikemodel.nosex <- update(pikemodel.1, ~.-sex)
+pikemodel.nosex <- update(pikemodel.1.1, ~.-sex)
 
-anova(pikemodel.1, pikemodel.nosex)
+anova(pikemodel.1.1, pikemodel.nosex)
 #sex is significant
 ```
 
@@ -2393,7 +2407,7 @@ rm(list = ls())
 #read in model data
 pikes2 <- fread("Data/pike/growth/Pikedata_model.csv")
 
-pikemodel.final <- lmer(log10(inc_um)~res_mean+lifeyear*phenotype+lifeyear*genotype+I(lifeyear^2)+Sr_mean+sex+(1|ID),
+pikemodel.final <- lmer(log10(inc_um)~res_mean+lifeyear*phenotype+I(lifeyear^2)+Sr_mean+sex+(1|ID),
                     REML = F, data = pikes2)
 
 summary(pikemodel.final)
@@ -2409,7 +2423,7 @@ rm(list = ls())
 pikes2 <- fread("Data/pike/growth/Pikedata_model.csv")
 
 #validation
-pikemodel.final <- lmer(log10(inc_um)~res_mean+lifeyear*phenotype+lifeyear*genotype+I(lifeyear^2)+Sr_mean+sex+(1|ID),
+pikemodel.final <- lmer(log10(inc_um)~res_mean+lifeyear*phenotype+I(lifeyear^2)+Sr_mean+sex+(1|ID),
                     REML = F, data = pikes2)
 
 pikes2$resid <- resid(pikemodel.final)
@@ -2430,7 +2444,6 @@ dev.off()
 png(filename = "Figures/supplement/S5_params.png", width = 5000, height = 2500, res = 600)
 par(mfrow=c(2,3))
 plot(pikes2$resid~as.factor(pikes2$phenotype), ylab = "Residuals", xlab = "", las = 2)
-plot(pikes2$resid~as.factor(pikes2$genotype), ylab = "Residuals", xlab = "", las = 2)
 plot(pikes2$resid~as.factor(pikes2$sex), ylab = "Residuals", xlab = "Sex")
 plot(pikes2$resid~pikes2$lifeyear, ylab = "Residuals", xlab = "Age")
 plot(pikes2$resid~pikes2$res_mean, ylab = "Residuals", xlab = "d18O")
@@ -2542,7 +2555,7 @@ rm(list = ls())
 
 pikes2 <- fread("Data/pike/growth/Pikedata_model.csv")
 
-pikemodel.final <- lmer(log10(inc_um)~res_mean+lifeyear*phenotype+lifeyear*genotype+I(lifeyear^2)+Sr_mean+sex+(1|ID),
+pikemodel.final <- lmer(log10(inc_um)~res_mean+lifeyear*phenotype+I(lifeyear^2)+Sr_mean+sex+(1|ID),
                     REML = F, data = pikes2)
 
 mypalette1 <- adjustcolor(c("#004643","#00BFB2","#F1C40F","#C5D86D","#AF3800"), alpha.f = 0.6)
@@ -2596,7 +2609,7 @@ Ecogrowth <- ggplot(Newdata2, aes(factor(lifeyear), prediction, fill=phenotype),
         legend.title = element_text(size = 30, colour = "black"),
         legend.key.size = unit(2.5,"line"))
 
-ggsave("Figures/MS/Ecotype-effects-growth.png", Ecogrowth, width = 16, height = 8, dpi = 600, bg = "white")
+ggsave("Figures/MS/Phenotype-effects-growth.pdf", Ecogrowth, width = 16, height = 8, dpi = 600, bg = "white")
 ```
 
 ## Lifelong growth
