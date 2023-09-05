@@ -58,7 +58,8 @@ Five fish excluded:
 "BH-01908" -> Vaterite,
 "BH-90962" -> Lost during SIMS preprocessing,
 "BH-93190" -> no SIMS transect (lightning strike occurred during analysis)
-```{r marry d18O data to Sr data, include=FALSE, eval=FALSE}
+```{r marry d18O data to Sr:Ca data, include=FALSE, eval=FALSE}
+#Script to align Sr:Ca values (5.5 um step size) with d18O values (35 um step size) in a common data frame
 rm(list = ls())
 
 #Read in LA-ICPMS and SIMS data
@@ -180,6 +181,7 @@ fwrite(oto.int, file = "Data/pike/elements/Oto_LA-to-d18O_interpolation.csv")
 ```
 
 ```{r covariance analysis d18O vs Sr and data correction, include=FALSE, eval=FALSE}
+#Script to correct d18O values for salinity effects by transforming to residuals from linear regression d18O~Sr:Ca
 rm(list = ls())
 
 #read in combined element transect data
@@ -236,12 +238,17 @@ subset_KD <- subset_KD%>%drop_na()
 oto.int3 <- rbind(oto.int2, subset_KD)
 
 #check for pattern retention
-plot(oto.int3[oto.int3$fish_ID=="BH-01906",]$sims_dist, oto.int3[oto.int3$fish_ID=="BH-01906",]$res, type="l")
+par(mfrow = c(1,2))
+plot(oto.int3[oto.int3$fish_ID=="BH-01906",]$sims_dist, oto.int3[oto.int3$fish_ID=="BH-01906",]$d18O, type="l",
+     xlab = "Distance from core (um)", ylab = "d18O (permil VPDB)")
+plot(oto.int3[oto.int3$fish_ID=="BH-01906",]$sims_dist, oto.int3[oto.int3$fish_ID=="BH-01906",]$res, type="l",
+     xlab = "Distance from core (um)", ylab = "d18O residual")
 
 fwrite(oto.int3, "Data/pike/elements/Oto_LA-to-d18O_interpolation_Sr-corrected.csv")
 ```
 
 ```{r average corrected d18O over years, include=FALSE, eval=FALSE}
+#Script to average over yearly temperature signal in d18O to arrive at mean lifelong thermal niche
 rm(list = ls())
 
 #read in data
@@ -280,6 +287,7 @@ fwrite(oto.int2, "Data/pike/elements/Oto_LA-to-d18O_interpolation_Sr-corrected_s
 ```
 ## Lifelong niche (individual and population level)
 ```{r calculate profile plots for individuals, include=FALSE, eval=FALSE}
+#Script to calculate individual-level life history plots for individual visual assessment of thermosaline history
 rm(list = ls())
 
 #read in raw data
@@ -290,8 +298,9 @@ d18O <- fread("Data/pike/elements/Pike-d18O-years_whole-sample_with-TL.txt")
 LA <- as.data.frame(LA)
 d18O <- as.data.frame(d18O)
 
+#Format and simplify capture locations
 LA <- LA%>%
-  transmute(ID = ID,
+  transmute(ID = fishID,
             capt = area,
             area = case_when(area %in% "Peene" ~ "Freshwater",
                              area %in% "Barthe" ~ "Freshwater",
@@ -316,7 +325,7 @@ LA <- LA%>%
             LA_dist = LA_dist)
 
 d18O <- d18O%>%
-  transmute(ID = ID,
+  transmute(ID = fishID,
             capt = area,
             area = case_when(area %in% "Peene" ~ "Freshwater",
                              area %in% "Barthe" ~ "Freshwater",
@@ -339,8 +348,8 @@ d18O <- d18O%>%
 
 LA <- LA %>% drop_na()
 d18O <- d18O%>%drop_na()
-# Loop--------------------------------------------------------------------------
 
+# Loop to plot individuals
 mypallete <- viridis::viridis(4, direction = 1)
 
 IDOto <- unique(d18O$ID)
@@ -440,99 +449,9 @@ for (i in 1:length(IDOto)) {
 }
 ```
 
-```{r lifelong niche, include=FALSE, eval=FALSE}
-#script to form annual means of elemental data for clustering and increment analysis
-rm(list = ls())
-#Read in data
-oto.int <- fread("Data/pike/elements/Oto_LA-to-d18O_interpolation_Sr-corrected_smooth.csv")
-
-oto.int.lifehist <- oto.int%>%
-  filter(area!="Control")%>%
-  transmute(ID=ID,
-            age=as.factor(age),
-            capt=capt,
-            area=case_when(area=="WRB"~"Lagoon",
-                           area=="NRB"~"Lagoon",
-                           area=="GB"~"Lagoon",
-                           area=="Freshwater"~"Tributary"),
-            d18O=d18O,
-            d18O_res=res,
-            Sr=Sr,
-            year=as.factor(year),
-            dist=dist)
-
-# Plot lifelong increase in d18O --> colder the older
-mypallette <- viridis::viridis(4, direction = 1)
-
-d18O <- ggplot(oto.int.lifehist, aes(year, d18O_res))+
-  geom_boxplot(aes(color = area), width = 0.5, outlier.size = .5)+
-  scale_x_discrete(limits = factor(1:10),
-                   labels=c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10"))+
-  labs(x="Age (years)",
-       y=expression("Sr-corr."~delta^18*"O"~("VPDB \u2030")),
-       color="area of capture")+
-  theme_classic()+
-  scale_color_viridis_d(direction = 1, begin = 0, end = 0.7)+
-  theme(panel.grid.major = element_line(),
-        legend.position = "none",
-        legend.background = element_blank(),
-        legend.box.background = element_blank(),
-        axis.line = element_line(size = .5, colour = "black", linetype = 1),
-        axis.ticks = element_line(size = .5, colour = "black"),
-        axis.text = element_text(size = 8, colour = "black"),
-        axis.title.x = element_text(size = 8),
-        axis.title.y = element_text(size = 8,
-                                    margin = margin(r=15)),
-        legend.text = element_text(size = 8),
-        legend.title = element_text(size = 8),
-        legend.key.size = unit(.8,"line"))+
-  coord_cartesian(clip = "off")+
-  geom_segment(x=-0.56, y=0, xend=-0.56, yend=2.5, 
-               lineend = "butt", linejoin = "mitre",
-               size=3, arrow = arrow(length = unit(0.2, "inches")),
-               color="#66CCCC")+
-  annotation_custom(grob = text_grob(label = "lower temperature", 
-                                     rot = 90, face = "bold", size = 5),
-                                     ymin=0, ymax=2.5,
-                                     xmin=-0.57, xmax=-0.57)+
-  geom_segment(x=-0.56, y=0, xend=-0.56, yend=-2.5, 
-               lineend = "butt", linejoin = "mitre",
-               size=3, arrow = arrow(length = unit(0.2, "inches")),
-               color="#FF6666")+
-  annotation_custom(grob = text_grob(label = "higher temperature", 
-                                     rot = -90, face = "bold", size = 5),
-                                     ymin=0, ymax=-2.5,
-                                     xmin=-0.54, xmax=-0.54)
-
-#Lifelong increase in Sr/Ca --> saltier the older
-SrCa <- ggplot(oto.int.lifehist, aes(year, Sr*1000))+
-  geom_boxplot(aes(color = area), width = 0.5, outlier.size = .5)+
-  scale_x_discrete(limits = factor(1:10))+
-  labs(x="Age (years)",
-       y="Sr/Ca (mg/g)",
-       color="area of capture")+
-  theme_classic()+
-  scale_color_viridis_d(direction = 1, begin = 0, end = 0.7)+
-  theme(panel.grid.major = element_line(),
-        legend.position = "none",
-        legend.background = element_blank(),
-        legend.box.background = element_blank(),
-        axis.line = element_line(size = .5, colour = "black", linetype = 1),
-        axis.ticks = element_line(size = .5, colour = "black"),
-        axis.text = element_text(size = 8, colour = "black"),
-        axis.title.x = element_text(size = 8),
-        axis.title.y = element_text(size = 8),
-        legend.text = element_text(size = 8),
-        legend.title = element_text(size = 8),
-        legend.key.size = unit(.8,"line"))
-
-allplots <- ggarrange(d18O, SrCa, ncol = 2, nrow = 1, labels = c("A", "B"), common.legend = TRUE, legend = "bottom")
-
-ggsave("Figures/supplement/Lifelong_niche.png", allplots, width = 15, height = 6, units = "cm", dpi = 600, bg = "white")
-```
-
 ## DTW-clustering of otolith timeseries
 ```{r subset data, include=FALSE, eval=FALSE}
+#Script to subset data sets into lagoon and freshwater sample
 rm(list = ls())
 #read in data
 oto.int <- fread("Data/pike/elements/Oto_LA-to-d18O_interpolation_Sr-corrected_smooth.csv")
@@ -552,7 +471,8 @@ fwrite(Fgroup, "Data/pike/clustering/Tributary-sample-transects.csv")
 fwrite(Bgroup, "Data/pike/clustering/Lagoon-sample-transects.csv")
 ```
 
-```{r dtw data prep, include=FALSE, eval=FALSE}
+```{r dtw data prep and clustering, include=FALSE, eval=FALSE}
+#Script to reinterpolate transects to standard length and perform DTW clustering
 rm(list = ls())
 
 #read in data
@@ -608,17 +528,6 @@ for (i in 1:length(IDOto)) {
 
 names(Fseries) <- c(IDOto)
 
-#save data series
-save(Fgroup,Bgroup,dataB, dataF, Bseries, Fseries, interpol,
-     file = "Data/Pike/Pike_element_transects_hierarchical-prep.RData")
-```
-
-```{r Hierarchical dtw clustering with even lengths, include=FALSE, eval=FALSE}
-rm(list = ls())
-
-#load hierarchical data prep
-load("Data/Pike/Pike_element_transects_hierarchical-prep.RData")
-
 #cluster Bodden with cutoff test
 clust_B <- tsclust(series = Bseries, type = "hierarchical",
                   k = 2L:6L,centroid = dba,
@@ -627,7 +536,9 @@ clust_B <- tsclust(series = Bseries, type = "hierarchical",
 
 names(clust_B) <- paste0("k_",2L:6L)
 
+#Internal cluster validity indexes to evaluate which number of clusters is ideal
 EvalB <- data.frame(sapply(clust_B, cvi, type = "internal"))
+#legend for validity index "max" -> index should be maximized; "min" -> index should be minimized
 EvalB$win <- c("max", "max","max","min","min","max","min")
 
 #cluster FW with cutoff test
@@ -638,7 +549,9 @@ clust_F <- tsclust(series = Fseries, type = "hierarchical",
 
 names(clust_F) <- paste0("k_",2L:6L)
 
+#Internal cluster validity indexes to evaluate which number of clusters is ideal
 EvalF <- data.frame(sapply(clust_B, cvi, type = "internal"))
+#legend for validity index "max" -> index should be maximized; "min" -> index should be minimized
 EvalF$win <- c("max", "max","max","min","min","max","min")
 
 #Plot best solution lagoons
@@ -663,22 +576,18 @@ save(Fgroup,Bgroup,dataB, dataF, Bseries, Fseries, interpol, clust_B, clust_F, L
 
 ```{r cluster assignment hierarchical, include=FALSE, eval=FALSE}
 rm(list=ls())
-load("Data/pike/clustering/Adults_element_transects_hierarchical_all.RData")
+load("Data/Pike/Adults_hierarchical_clusters.RData")
 #assign clusters to fish
-Lagoonplot
-
-fishassign_B2 <- data.frame(ID=names(Bseries), 
-                            clust2=factor(clust_B$k_4@cluster, 
+fishassign_B1 <- data.frame(fish_ID=names(Bseries), 
+                            cluster=factor(clust_B$k_4@cluster, 
                                            levels = c(1:4), 
                                            labels = c("BW int saline|cold",
                                                       "BW Low saline|shift",
                                                       "BW high saline|warm",
                                                       "BW high saline|cold")))
 
-FWplot
-
-fishassign_F2 <- data.frame(ID=names(Fseries), 
-                            clust2=factor(clust_F$k_6@cluster, 
+fishassign_F1 <- data.frame(fish_ID=names(Fseries), 
+                            cluster=factor(clust_F$k_6@cluster, 
                                            levels = c(1:6), 
                                            labels = c("FW low saline|shift",
                                                       "FW low saline|cold",
@@ -687,27 +596,23 @@ fishassign_F2 <- data.frame(ID=names(Fseries),
                                                       "FW int saline|shift",
                                                       "FW high saline|const")))
 #Join dtw clusters with pike data
-fishassign_B <- Bgroup%>%
-  group_by(ID)%>%
-  transmute(ID=ID,
-            capt=capt,
-            area=area)%>%
+fishassign_B2 <- Bgroup%>%
+  group_by(fish_ID)%>%
+  transmute(fish_ID=fish_ID,)%>%
   distinct()%>%
-  inner_join(fishassign_B2, by="ID")%>%
-  mutate(clust=fct_relevel(clust2,
+  inner_join(fishassign_B1, by="fish_ID")%>%
+  mutate(cluster=fct_relevel(cluster,
                            "BW Low saline|shift",
                            "BW int saline|cold",
                            "BW high saline|warm",
                            "BW high saline|cold"))
 
-fishassign_F <- Fgroup%>%
-  group_by(ID)%>%
-  transmute(ID=ID,
-            capt=capt,
-            area=area)%>%
+fishassign_F2 <- Fgroup%>%
+  group_by(fish_ID)%>%
+  transmute(fish_ID=fish_ID,)%>%
   distinct()%>%
-  inner_join(fishassign_F2, by="ID")%>%
-  mutate(clust2=fct_relevel(clust2,
+  inner_join(fishassign_F1, by="fish_ID")%>%
+  mutate(cluster=fct_relevel(cluster,
                             "FW low saline|cold",
                             "FW low saline|shift",
                             "FW int saline|const",
@@ -715,66 +620,56 @@ fishassign_F <- Fgroup%>%
                             "FW high saline|const",
                             "FW high saline|shift"))
 
-fwrite(fishassign_B, file = "Data/Pike/clustering/Bcluster_all.csv")
-fwrite(fishassign_F, file = "Data/Pike/clustering/Fcluster_all.csv")
+Groupall_clust <- rbind(fishassign_B2, fishassign_F2)
 
+Groupall_transect <- rbind(Bgroup, Fgroup)
 
-save(Fgroup,Bgroup,dataB, dataF, Bseries, Fseries, interpol, clust_B, clust_F,
-     fishassign_B, fishassign_F, Lagoonplot, FWplot,
-     file = "Data/Pike/Pike_hierarchical_clusters.RData")
+Groupall <- Groupall_transect%>%
+  inner_join(Groupall_clust, by = c("fish_ID"))
+
+fwrite(Groupall, "Data/Pike/clustering/Phenotypes-element-transects-all.csv")
 ```
 
 ```{r table of poportions, include=FALSE, eval=FALSE}
+#Script to calculate simple distribution tables of phenotype number per area for the calculation of proportions
 rm(list = ls())
 
-Groupall <- fread("Data/Pike/clustering/Ecotypes-element-transects-all.csv")
+Groupall <- fread("Data/Pike/clustering/Phenotypes-element-transects-all.csv")
 
-allpike_eco <- Groupall%>%
-  mutate(ecotype=case_when(clust2=="FW low saline|cold"~"FW-resident",
-                              clust2=="FW low saline|shift"~"FW-resident",
-                              clust2=="FW int saline|const"~"FW-resident",
-                              clust2=="FW int saline|shift"~"Anadromous",
-                              clust2=="FW high saline|shift"~"Anadromous",
-                              clust2=="FW high saline|const"~"Trans-habitat",
-                              clust2=="BW Low saline|shift"~"Trans-habitat",
-                              clust2=="BW int saline|cold"~"BW-resident",
-                              clust2=="BW high saline|cold"~"BW-resident",
-                              clust2=="BW high saline|warm"~"BW-resident"))%>%
-  transmute(ID=ID, 
-            area=area.x,
-            phenotype=ecotype,
-            clust=clust2)%>%
+allpike_pheno <- Groupall%>%
+  mutate(phenotype=case_when(cluster=="FW low saline|cold"~"FW-resident",
+                             cluster=="FW low saline|shift"~"FW-resident",
+                             cluster=="FW int saline|const"~"FW-resident",
+                             cluster=="FW int saline|shift"~"Anadromous",
+                             cluster=="FW high saline|shift"~"Anadromous",
+                             cluster=="FW high saline|const"~"Trans-habitat",
+                             cluster=="BW Low saline|shift"~"Trans-habitat",
+                             cluster=="BW int saline|cold"~"BW-resident",
+                             cluster=="BW high saline|cold"~"BW-resident",
+                             cluster=="BW high saline|warm"~"BW-resident"))%>%
+  transmute(fish_ID=fish_ID, 
+            area=area,
+            phenotype=phenotype,
+            cluster=cluster)%>%
   distinct()
 
-Clust_props_per_area <- table(allpike_eco$clust)
+Clust_props_per_area <- table(allpike_pheno$cluster)
 
-Pheno_props_per_area <- table(allpike_eco$area, allpike_eco$phenotype)
+Pheno_props_per_area <- table(allpike_pheno$area, allpike_pheno$phenotype)
 write.table(Pheno_props_per_area, "Data/Pike/clustering/Lagoonprobs.csv", sep = ",")
 ```
 
 ```{r plot freshwater clusters, include=FALSE, eval=FALSE}
+#Script to plot fine-grained cluster solution for freshwater sample (supplement)
 rm(list=ls())
-load("Data/pike/clustering/Adults_element_transects_hierarchical_all.RData")
 
-Bgroup.clus <- Bgroup%>%inner_join(fishassign_B, by="ID")
-Fgroup.clus <- Fgroup%>%inner_join(fishassign_F, by="ID")
-
-Groupall <- rbind(Bgroup.clus, Fgroup.clus)
-
-agebreaks <- Groupall%>%group_by(ID, year)%>%
-  summarise(yeardist=max(dist))%>%
-  ungroup()%>%group_by(year)%>%
-  mutate(mean.yeardist=mean(yeardist))
-
-agebreaks.num <- unique(agebreaks$mean.yeardist)
-agebreaks.label <- as.character(seq(1,11,1))
-
+Groupall <- fread("Data/Pike/clustering/Phenotypes-element-transects-all.csv")
 
 # Generate a color ramp between two colors
 mypallette <- c(colorRampPalette(c("#C5D86D", "#00BFB2", "#F1C40F"))(6))
 
-A <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW low saline|cold",])+
-  geom_line(aes(dist, Sr*1000, group=ID), color="grey", linewidth=.3, alpha=.8)+
+A <- ggplot(Groupall[Groupall$cluster=="FW low saline|cold",])+
+  geom_line(aes(dist, Sr*1000, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
   geom_smooth(aes(dist, Sr*1000), color="black", fill=mypallette[1], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
@@ -806,9 +701,9 @@ A <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW low saline|cold",])+
                                      ymin=0, ymax=8,
                                      xmin=-460, xmax=-460)
 
-A1 <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW low saline|cold",])+
-  geom_line(aes(dist, d18O_res, group=ID), color="grey", linewidth=.3, alpha=.8)+
-  geom_smooth(aes(dist, d18O_res), color="black", fill=mypallette[1], 
+A1 <- ggplot(Groupall[Groupall$cluster=="FW low saline|cold",])+
+  geom_line(aes(dist, res, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
+  geom_smooth(aes(dist, res), color="black", fill=mypallette[1], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
   ylim(-3, 3)+
@@ -844,8 +739,8 @@ A1 <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW low saline|cold",])+
                                      ymin=0, ymax=3.2,
                                      xmin=-460, xmax=-460)
 
-B <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW low saline|shift",])+
-  geom_line(aes(dist, Sr*1000, group=ID), color="grey", linewidth=.3, alpha=.8)+
+B <- ggplot(Groupall[Groupall$cluster=="FW low saline|shift",])+
+  geom_line(aes(dist, Sr*1000, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
   geom_smooth(aes(dist, Sr*1000), color="black", fill=mypallette[2], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
@@ -870,9 +765,9 @@ B <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW low saline|shift",])+
   annotation_custom(grob = text_grob(label = "FW low saline|shift (N = 9)", size = 7, just = "left"),
                     ymin = 9, ymax = 9, xmin = 100, xmax = 100)
 
-B1 <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW low saline|shift",])+
-  geom_line(aes(dist, d18O_res, group=ID), color="grey", linewidth=.3, alpha=.8)+
-  geom_smooth(aes(dist, d18O_res), color="black", fill=mypallette[2], 
+B1 <- ggplot(Groupall[Groupall$cluster=="FW low saline|shift",])+
+  geom_line(aes(dist, res, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
+  geom_smooth(aes(dist, res), color="black", fill=mypallette[2], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
   ylim(-3, 3)+
@@ -893,8 +788,8 @@ B1 <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW low saline|shift",])+
         plot.background = element_blank())+
   coord_cartesian(clip = "off")
 
-C <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW int saline|const",])+
-  geom_line(aes(dist, Sr*1000, group=ID), color="grey", linewidth=.3, alpha=.8)+
+C <- ggplot(Groupall[Groupall$cluster=="FW int saline|const",])+
+  geom_line(aes(dist, Sr*1000, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
   geom_smooth(aes(dist, Sr*1000), color="black", fill=mypallette[3], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
@@ -919,9 +814,9 @@ C <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW int saline|const",])+
   annotation_custom(grob = text_grob(label = "FW int saline|const (N = 14)", size = 7, just = "left"),
                     ymin = 9, ymax = 9, xmin = 100, xmax = 100)
 
-C1 <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW int saline|const",])+
-  geom_line(aes(dist, d18O_res, group=ID), color="grey", linewidth=.3, alpha=.8)+
-  geom_smooth(aes(dist, d18O_res), color="black", fill=mypallette[3], 
+C1 <- ggplot(Groupall[Groupall$cluster=="FW int saline|const",])+
+  geom_line(aes(dist, res, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
+  geom_smooth(aes(dist, res), color="black", fill=mypallette[3], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
   ylim(-3, 3)+
@@ -942,8 +837,8 @@ C1 <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW int saline|const",])+
         plot.background = element_blank())+
   coord_cartesian(clip = "off")
 
-D <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW int saline|shift",])+
-  geom_line(aes(dist, Sr*1000, group=ID), color="grey", linewidth=.3, alpha=.8)+
+D <- ggplot(Groupall[Groupall$cluster=="FW int saline|shift",])+
+  geom_line(aes(dist, Sr*1000, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
   geom_smooth(aes(dist, Sr*1000), color="black", fill=mypallette[4], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
@@ -968,9 +863,9 @@ D <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW int saline|shift",])+
   annotation_custom(grob = text_grob(label = "FW int saline|shift (N = 7)", size = 7, just = "left"),
                     ymin = 9, ymax = 9, xmin = 100, xmax = 100)
 
-D1 <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW int saline|shift",])+
-  geom_line(aes(dist, d18O_res, group=ID), color="grey", linewidth=.3, alpha=.8)+
-  geom_smooth(aes(dist, d18O_res), color="black", fill=mypallette[4], 
+D1 <- ggplot(Groupall[Groupall$cluster=="FW int saline|shift",])+
+  geom_line(aes(dist, res, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
+  geom_smooth(aes(dist, res), color="black", fill=mypallette[4], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
   ylim(-3, 3)+
@@ -991,8 +886,8 @@ D1 <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW int saline|shift",])+
         plot.background = element_blank())+
   coord_cartesian(clip = "off")
 
-E <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW high saline|shift",])+
-  geom_line(aes(dist, Sr*1000, group=ID), color="grey", linewidth=.3, alpha=.8)+
+E <- ggplot(Groupall[Groupall$cluster=="FW high saline|shift",])+
+  geom_line(aes(dist, Sr*1000, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
   geom_smooth(aes(dist, Sr*1000), color="black", fill=mypallette[5], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
@@ -1017,9 +912,9 @@ E <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW high saline|shift",])+
   annotation_custom(grob = text_grob(label = "FW high saline|shift (N = 9)", size = 7, just = "left"),
                     ymin = 9, ymax = 9, xmin = 100, xmax = 100)
 
-E1 <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW high saline|shift",])+
-  geom_line(aes(dist, d18O_res, group=ID), color="grey", linewidth=.3, alpha=.8)+
-  geom_smooth(aes(dist, d18O_res), color="black", fill=mypallette[5], 
+E1 <- ggplot(Groupall[Groupall$cluster=="FW high saline|shift",])+
+  geom_line(aes(dist, res, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
+  geom_smooth(aes(dist, res), color="black", fill=mypallette[5], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
   ylim(-3, 3)+
@@ -1040,8 +935,8 @@ E1 <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW high saline|shift",])+
         plot.background = element_blank())+
   coord_cartesian(clip = "off")
 
-F1 <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW high saline|const",])+
-  geom_line(aes(dist, Sr*1000, group=ID), color="grey", linewidth=.3, alpha=.8)+
+F1 <- ggplot(Groupall[Groupall$cluster=="FW high saline|const",])+
+  geom_line(aes(dist, Sr*1000, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
   geom_smooth(aes(dist, Sr*1000), color="black", fill=mypallette[6], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
@@ -1066,9 +961,9 @@ F1 <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW high saline|const",])+
   annotation_custom(grob = text_grob(label = "FW high saline|const (N = 11)", size = 7, just = "left"),
                     ymin = 9, ymax = 9, xmin = 100, xmax = 100)
 
-F2 <- ggplot(Fgroup.clus[Fgroup.clus$clust2=="FW high saline|const",])+
-  geom_line(aes(dist, d18O_res, group=ID), color="grey", linewidth=.3, alpha=.8)+
-  geom_smooth(aes(dist, d18O_res), color="black", fill=mypallette[6], 
+F2 <- ggplot(Groupall[Groupall$cluster=="FW high saline|const",])+
+  geom_line(aes(dist, res, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
+  geom_smooth(aes(dist, res), color="black", fill=mypallette[6], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
   ylim(-3, 3)+
@@ -1099,28 +994,16 @@ ggsave("Figures/supplement/FW-clusters-life-history-transects.png", Transects2, 
 ```
 
 ```{r plot lagoon clusters, include=FALSE, eval=FALSE}
+#Script to plot fine-grained cluster solution for freshwater sample (supplement)
 rm(list=ls())
-load("Data/pike/clustering/Adults_element_transects_hierarchical_all.RData")
 
-Bgroup.clus <- Bgroup%>%inner_join(fishassign_B, by="ID")
-Fgroup.clus <- Fgroup%>%inner_join(fishassign_F, by="ID")
-
-Groupall <- rbind(Bgroup.clus, Fgroup.clus)
-
-agebreaks <- Groupall%>%group_by(ID, year)%>%
-  summarise(yeardist=max(dist))%>%
-  ungroup()%>%group_by(year)%>%
-  mutate(mean.yeardist=mean(yeardist))
-
-agebreaks.num <- unique(agebreaks$mean.yeardist)
-agebreaks.label <- as.character(seq(1,11,1))
-
+Groupall <- fread("Data/Pike/clustering/Phenotypes-element-transects-all.csv")
 
 # Generate a color ramp between two colors
 mypallette <- c(colorRampPalette(c("#004643", "#F1C40F"))(4))
 
-A <- ggplot(Bgroup.clus[Bgroup.clus$clust2=="BW Low saline|shift",])+
-  geom_line(aes(dist, Sr*1000, group=ID), color="grey", linewidth=.3, alpha=.8)+
+A <- ggplot(Groupall[Groupall$cluster=="BW Low saline|shift",])+
+  geom_line(aes(dist, Sr*1000, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
   geom_smooth(aes(dist, Sr*1000), color="black", fill=mypallette[4], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
@@ -1152,9 +1035,9 @@ A <- ggplot(Bgroup.clus[Bgroup.clus$clust2=="BW Low saline|shift",])+
                                      ymin=0, ymax=8,
                                      xmin=-460, xmax=-460)
 
-A1 <- ggplot(Bgroup.clus[Bgroup.clus$clust2=="BW Low saline|shift",])+
-  geom_line(aes(dist, d18O_res, group=ID), color="grey", linewidth=.3, alpha=.8)+
-  geom_smooth(aes(dist, d18O_res), color="black", fill=mypallette[4], 
+A1 <- ggplot(Groupall[Groupall$cluster=="BW Low saline|shift",])+
+  geom_line(aes(dist, res, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
+  geom_smooth(aes(dist, res), color="black", fill=mypallette[4], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
   ylim(-3, 3)+
@@ -1190,8 +1073,8 @@ A1 <- ggplot(Bgroup.clus[Bgroup.clus$clust2=="BW Low saline|shift",])+
                                      ymin=0, ymax=3.2,
                                      xmin=-460, xmax=-460)
 
-B <- ggplot(Bgroup.clus[Bgroup.clus$clust2=="BW int saline|cold",])+
-  geom_line(aes(dist, Sr*1000, group=ID), color="grey", linewidth=.3, alpha=.8)+
+B <- ggplot(Groupall[Groupall$cluster=="BW int saline|cold",])+
+  geom_line(aes(dist, Sr*1000, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
   geom_smooth(aes(dist, Sr*1000), color="black", fill=mypallette[3], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
@@ -1216,9 +1099,9 @@ B <- ggplot(Bgroup.clus[Bgroup.clus$clust2=="BW int saline|cold",])+
   annotation_custom(grob = text_grob(label = "BW int saline|cold (N = 17)", size = 7, just = "left"),
                     ymin = 9.3, ymax = 9.3, xmin = 100, xmax = 100)
 
-B1 <- ggplot(Bgroup.clus[Bgroup.clus$clust2=="BW int saline|cold",])+
-  geom_line(aes(dist, d18O_res, group=ID), color="grey", linewidth=.3, alpha=.8)+
-  geom_smooth(aes(dist, d18O_res), color="black", fill=mypallette[3], 
+B1 <- ggplot(Groupall[Groupall$cluster=="BW int saline|cold",])+
+  geom_line(aes(dist, res, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
+  geom_smooth(aes(dist, res), color="black", fill=mypallette[3], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
   ylim(-3, 3)+
@@ -1239,8 +1122,8 @@ B1 <- ggplot(Bgroup.clus[Bgroup.clus$clust2=="BW int saline|cold",])+
         plot.background = element_blank())+
   coord_cartesian(clip = "off")
 
-C <- ggplot(Bgroup.clus[Bgroup.clus$clust2=="BW high saline|warm",])+
-  geom_line(aes(dist, Sr*1000, group=ID), color="grey", linewidth=.3, alpha=.8)+
+C <- ggplot(Groupall[Groupall$cluster=="BW high saline|warm",])+
+  geom_line(aes(dist, Sr*1000, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
   geom_smooth(aes(dist, Sr*1000), color="black", fill=mypallette[2], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
@@ -1265,9 +1148,9 @@ C <- ggplot(Bgroup.clus[Bgroup.clus$clust2=="BW high saline|warm",])+
   annotation_custom(grob = text_grob(label = "BW high saline|warm (N = 22)", size = 7, just = "left"),
                     ymin = 9.3, ymax = 9.3, xmin = 100, xmax = 100)
 
-C1 <- ggplot(Bgroup.clus[Bgroup.clus$clust2=="BW high saline|warm",])+
-  geom_line(aes(dist, d18O_res, group=ID), color="grey", linewidth=.3, alpha=.8)+
-  geom_smooth(aes(dist, d18O_res), color="black", fill=mypallette[2], 
+C1 <- ggplot(Groupall[Groupall$cluster=="BW high saline|warm",])+
+  geom_line(aes(dist, res, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
+  geom_smooth(aes(dist, res), color="black", fill=mypallette[2], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
   ylim(-3, 3)+
@@ -1288,8 +1171,8 @@ C1 <- ggplot(Bgroup.clus[Bgroup.clus$clust2=="BW high saline|warm",])+
         plot.background = element_blank())+
   coord_cartesian(clip = "off")
 
-D <- ggplot(Bgroup.clus[Bgroup.clus$clust2=="BW high saline|cold",])+
-  geom_line(aes(dist, Sr*1000, group=ID), color="grey", linewidth=.3, alpha=.8)+
+D <- ggplot(Groupall[Groupall$cluster=="BW high saline|cold",])+
+  geom_line(aes(dist, Sr*1000, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
   geom_smooth(aes(dist, Sr*1000), color="black", fill=mypallette[1], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
@@ -1314,9 +1197,9 @@ D <- ggplot(Bgroup.clus[Bgroup.clus$clust2=="BW high saline|cold",])+
   annotation_custom(grob = text_grob(label = "BW high saline|cold (N = 7)", size = 7, just = "left"),
                     ymin = 9.3, ymax = 9.3, xmin = 100, xmax = 100)
 
-D1 <- ggplot(Bgroup.clus[Bgroup.clus$clust2=="BW high saline|cold",])+
-  geom_line(aes(dist, d18O_res, group=ID), color="grey", linewidth=.3, alpha=.8)+
-  geom_smooth(aes(dist, d18O_res), color="black", fill=mypallette[1], 
+D1 <- ggplot(Groupall[Groupall$cluster=="BW high saline|cold",])+
+  geom_line(aes(dist, res, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
+  geom_smooth(aes(dist, res), color="black", fill=mypallette[1], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
   ylim(-3, 3)+
@@ -1337,7 +1220,7 @@ D1 <- ggplot(Bgroup.clus[Bgroup.clus$clust2=="BW high saline|cold",])+
         plot.background = element_blank())+
   coord_cartesian(clip = "off")
 
-Transects <- ggarrange(A, B, C, D, A1, B1, C1, D1, labels = c("A", "B", "C", "D"), hjust = c(-3.85,-2.6,-1.2,0.15), vjust = c(2,2,2,2), font.label = list(size=10), nrow = 2, ncol = 4)
+Transects <- ggarrange(A, B, C, D, A1, B1, C1, D1, labels = c("G", "H", "I", "J"), hjust = c(-3.85,-2.6,-1.2,0.15), vjust = c(2,2,2,2), font.label = list(size=10), nrow = 2, ncol = 4)
 
 Transects2 <- annotate_figure(Transects, bottom = text_grob(expression("Distance from Core"~(mu~"m")), vjust = 1, size = 7))
 
@@ -1345,25 +1228,26 @@ ggsave("Figures/supplement/BW-clusters-life-history-transects.png", Transects2, 
 ```
 
 ```{r plot life history phenotypes, include=FALSE, eval=FALSE}
+#Script to plot life history phenotypes identified by grouping ecologically similar clusters (behavioral phenotypes)
 rm(list=ls())
-Groupall <- fread("Data/Pike/clustering/Ecotypes-element-transects-all.csv")
+Groupall <- fread("Data/Pike/clustering/Phenotypes-element-transects-all.csv")
 
 mypalette <- adjustcolor(c("#004643","#00BFB2","#F1C40F","#C5D86D","#AF3800"), alpha.f = 0.6)
 
-allpike_eco <- Groupall%>%
-  mutate(ecotype=case_when(clust2=="FW low saline|cold"~"FW-resident",
-                              clust2=="FW low saline|shift"~"FW-resident",
-                              clust2=="FW int saline|const"~"Anadromous",
-                              clust2=="FW int saline|shift"~"Anadromous",
-                              clust2=="FW high saline|shift"~"Anadromous",
-                              clust2=="FW high saline|const"~"Trans-habitat",
-                              clust2=="BW Low saline|shift"~"Trans-habitat",
-                              clust2=="BW int saline|cold"~"BW-resident",
-                              clust2=="BW high saline|cold"~"BW-resident",
-                              clust2=="BW high saline|warm"~"BW-resident"))
+allpike_pheno <- Groupall%>%
+  mutate(phenotype=case_when(cluster=="FW low saline|cold"~"FW-resident",
+                              cluster=="FW low saline|shift"~"FW-resident",
+                              cluster=="FW int saline|const"~"Anadromous",
+                              cluster=="FW int saline|shift"~"Anadromous",
+                              cluster=="FW high saline|shift"~"Anadromous",
+                              cluster=="FW high saline|const"~"Trans-habitat",
+                              cluster=="BW Low saline|shift"~"Trans-habitat",
+                              cluster=="BW int saline|cold"~"BW-resident",
+                              cluster=="BW high saline|cold"~"BW-resident",
+                              cluster=="BW high saline|warm"~"BW-resident"))
 
-A <- ggplot(allpike_eco[allpike_eco$ecotype=="FW-resident",])+
-  geom_line(aes(dist, Sr*1000, group=ID), color="grey", linewidth=.3, alpha=.8)+
+A <- ggplot(allpike_pheno[allpike_pheno$phenotype=="FW-resident",])+
+  geom_line(aes(dist, Sr*1000, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
   geom_smooth(aes(dist, Sr*1000), color="black", fill=mypalette[4], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
@@ -1395,9 +1279,9 @@ A <- ggplot(allpike_eco[allpike_eco$ecotype=="FW-resident",])+
                                      ymin=0, ymax=8,
                                      xmin=-460, xmax=-460)
 
-A1 <- ggplot(allpike_eco[allpike_eco$ecotype=="FW-resident",])+
-  geom_line(aes(dist, d18O_res, group=ID), color="grey", linewidth=.3, alpha=.8)+
-  geom_smooth(aes(dist, d18O_res), color="black", fill=mypalette[4], 
+A1 <- ggplot(allpike_pheno[allpike_pheno$phenotype=="FW-resident",])+
+  geom_line(aes(dist, res, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
+  geom_smooth(aes(dist, res), color="black", fill=mypalette[4], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
   ylim(-3, 3)+
@@ -1433,8 +1317,8 @@ A1 <- ggplot(allpike_eco[allpike_eco$ecotype=="FW-resident",])+
                                      ymin=0, ymax=3.2,
                                      xmin=-460, xmax=-460)
 
-B <- ggplot(allpike_eco[allpike_eco$ecotype=="BW-resident",])+
-  geom_line(aes(dist, Sr*1000, group=ID), color="grey", linewidth=.3, alpha=.8)+
+B <- ggplot(allpike_pheno[allpike_pheno$phenotype=="BW-resident",])+
+  geom_line(aes(dist, Sr*1000, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
   geom_smooth(aes(dist, Sr*1000), color="black", fill=mypalette[1], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
@@ -1459,9 +1343,9 @@ B <- ggplot(allpike_eco[allpike_eco$ecotype=="BW-resident",])+
   annotation_custom(grob = text_grob(label = "brackish resident (N = 46)", size = 7, just = "left"),
                     ymin = 9.3, ymax = 9.3, xmin = 100, xmax = 100)
 
-B1 <- ggplot(allpike_eco[allpike_eco$ecotype=="BW-resident",])+
-  geom_line(aes(dist, d18O_res, group=ID), color="grey", linewidth=.3, alpha=.8)+
-  geom_smooth(aes(dist, d18O_res), color="black", fill=mypalette[1], 
+B1 <- ggplot(allpike_pheno[allpike_pheno$phenotype=="BW-resident",])+
+  geom_line(aes(dist, res, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
+  geom_smooth(aes(dist, res), color="black", fill=mypalette[1], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
   ylim(-3, 3)+
@@ -1482,8 +1366,8 @@ B1 <- ggplot(allpike_eco[allpike_eco$ecotype=="BW-resident",])+
         plot.background = element_blank())+
   coord_cartesian(clip = "off")
 
-C <- ggplot(allpike_eco[allpike_eco$ecotype=="Anadromous",])+
-  geom_line(aes(dist, Sr*1000, group=ID), color="grey", linewidth=.3, alpha=.8)+
+C <- ggplot(allpike_pheno[allpike_pheno$phenotype=="Anadromous",])+
+  geom_line(aes(dist, Sr*1000, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
   geom_smooth(aes(dist, Sr*1000), color="black", fill=mypalette[2], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
@@ -1508,9 +1392,9 @@ C <- ggplot(allpike_eco[allpike_eco$ecotype=="Anadromous",])+
   annotation_custom(grob = text_grob(label = "anadromous type (N = 16)", size = 7, just = "left"),
                     ymin = 9.3, ymax = 9.3, xmin = 100, xmax = 100)
 
-C1 <- ggplot(allpike_eco[allpike_eco$ecotype=="Anadromous",])+
-  geom_line(aes(dist, d18O_res, group=ID), color="grey", linewidth=.3, alpha=.8)+
-  geom_smooth(aes(dist, d18O_res), color="black", fill=mypalette[2], 
+C1 <- ggplot(allpike_pheno[allpike_pheno$phenotype=="Anadromous",])+
+  geom_line(aes(dist, res, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
+  geom_smooth(aes(dist, res), color="black", fill=mypalette[2], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
   ylim(-3, 3)+
@@ -1531,8 +1415,8 @@ C1 <- ggplot(allpike_eco[allpike_eco$ecotype=="Anadromous",])+
         plot.background = element_blank())+
   coord_cartesian(clip = "off")
 
-D <- ggplot(allpike_eco[allpike_eco$ecotype=="Trans-habitat",])+
-  geom_line(aes(dist, Sr*1000, group=ID), color="grey", linewidth=.3, alpha=.8)+
+D <- ggplot(allpike_pheno[allpike_pheno$phenotype=="Trans-habitat",])+
+  geom_line(aes(dist, Sr*1000, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
   geom_smooth(aes(dist, Sr*1000), color="black", fill=mypalette[3], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
@@ -1557,9 +1441,9 @@ D <- ggplot(allpike_eco[allpike_eco$ecotype=="Trans-habitat",])+
   annotation_custom(grob = text_grob(label = "cross-habitat type (N = 31)", size = 7, just = "left"),
                     ymin = 9.3, ymax = 9.3, xmin = 100, xmax = 100)
 
-D1 <- ggplot(allpike_eco[allpike_eco$ecotype=="Trans-habitat",])+
-  geom_line(aes(dist, d18O_res, group=ID), color="grey", linewidth=.3, alpha=.8)+
-  geom_smooth(aes(dist, d18O_res), color="black", fill=mypalette[3], 
+D1 <- ggplot(allpike_pheno[allpike_pheno$phenotype=="Trans-habitat",])+
+  geom_line(aes(dist, res, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
+  geom_smooth(aes(dist, res), color="black", fill=mypalette[3], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
   ylim(-3, 3)+
@@ -1589,21 +1473,27 @@ ggsave("Figures/MS/Ecotypes-life-history-transects.png", Transects2, dpi = 600, 
 ```
 
 ```{r dissimilarity test, include=FALSE, eval=FALSE}
+#Script to perform dissimilarity test (PERMANOVA) and jackknife reclassification on clusters
 rm(list = ls())
+
 #read in data
-load("Data/Pike/Pike_element_transects_hierarchical_all.RData")
+Groupall <- fread("Data/Pike/clustering/Phenotypes-element-transects-all.csv")
 
-dataLagoon <- Bgroup%>%
-  transmute(ID=ID,
+dataLagoon <- Groupall%>%
+  filter(area%in%c("WRB", "NRB", "GB"))%>%
+  transmute(fish_ID=fish_ID,
             Sr=Sr,
-            d18O_res=d18O_res,
-            year=year)
+            d18O_res=res,
+            year=year,
+            cluster=cluster)
 
-dataFW <- Fgroup%>%
-  transmute(ID=ID,
+dataFW <- Groupall%>%
+  filter(!area%in%c("WRB", "NRB", "GB"))%>%
+  transmute(fish_ID=fish_ID,
             Sr=Sr,
-            d18O_res=d18O_res,
-            year=year)
+            d18O_res=res,
+            year=year,
+            cluster=cluster)
 
 #transform data to all positive
 dataLagoon$d18O_res <- (dataLagoon$d18O_res+sqrt((min(dataLagoon$d18O_res))^2))
@@ -1621,11 +1511,11 @@ dataFW$Sr <- (dataFW$Sr+sqrt((min(dataFW$Sr))^2))
 data <- rbind(dataLagoon, dataFW)
 
 #make list of matrices Bodden
-IDOto <- unique(data$ID)
+IDOto <- unique(data$fish_ID)
 series <- list()
 
 for (i in 1:length(IDOto)) {
-  m <- as.matrix(data[which(data$ID==IDOto[i]),])
+  m <- as.matrix(data[which(data$fish_ID==IDOto[i]),])
   series[[length(series)+1]] <- m
 }
 
@@ -1636,30 +1526,19 @@ Series <- do.call(rbind.data.frame,series)
 Series$ID <- substr(rownames(Series), 1,8)
 rownames(Series) <- NULL
 
-#Make cluster list
-Bclust <- fishassign_B%>%
-  transmute(ID=ID,
-            clust=clust2)
-Fclust <- fishassign_F%>%
-  transmute(ID=ID,
-            clust=clust2)
-
-clust <- rbind(Bclust, Fclust)
-
 #Assign years based on cell numbers, join with cluster ID
 Series1 <- Series%>%
-  inner_join(clust, by="ID")%>%
-  transmute(ID=ID,
+  transmute(fish_ID=fish_ID,
             year=case_when(year<2~"orig",
                            year>1&year<3~"juv",
                            year>2~"adult"),
-            clust=clust,
+            cluster=cluster,
             Sr=Sr,
             d18O_res=d18O_res)%>%
-  group_by(ID, year)%>%
-  summarize(ID=ID,
+  group_by(fish_ID, year)%>%
+  summarize(fish_ID=fish_ID,
             year=year,
-            clust=clust,
+            cluster=cluster,
             Sr=mean(as.numeric(Sr)),
             d18O_res=mean(as.numeric(d18O_res)))%>%
   distinct()
@@ -1668,47 +1547,43 @@ Series1 <- Series%>%
 Series2 <- pivot_wider(Series1, names_from = year, values_from = c(Sr, d18O_res))
 
 #cluster needs to be a factor
-Series2$clust <- as.factor(Series2$clust)
+Series2$cluster <- as.factor(Series2$cluster)
 
 #make mvabund object of Sr and d18O data
 elements <- mvabund(Series2[,3:8])
 
-boxplot(elements, na.rm=T)
-
 Pikedist <- vegdist(elements, method = "euclidean", na.rm = T)
-Disp <- betadisper(Pikedist, Series2$clust)
+Disp <- betadisper(Pikedist, Series2$cluster)
 anova(Disp)
 
 plot(Disp)
 
-adonis2(elements~Series2$clust, method = "euclidean", permutations = 9999, na.rm=T)
-```
+adonis2(elements~Series2$cluster, method = "euclidean", permutations = 9999, na.rm=T)
 
-```{r jackknife reclassification, eval=FALSE}
 set.seed(128)
 
 Series3 <- na.omit(Series2)
 
 Series3 <- Series3%>%
-  mutate(clust=case_when(clust=="FW low saline|cold"~"FW_resident",
-                            clust=="FW low saline|shift"~"FW_resident",
-                            clust=="FW int saline|const"~"Anadromous",
-                            clust=="FW int saline|shift"~"Anadromous",
-                            clust=="FW high saline|shift"~"Anadromous",
-                            clust=="FW high saline|const"~"Trans-habitat",
-                            clust=="BW Low saline|shift"~"Trans-habitat",
-                            clust=="BW int saline|cold"~"BW-resident",
-                            clust=="BW high saline|cold"~"BW-resident",
-                            clust=="BW high saline|warm"~"BW-resident"))
+  mutate(cluster=case_when(cluster=="FW low saline|cold"~"FW_resident",
+                            cluster=="FW low saline|shift"~"FW_resident",
+                            cluster=="FW int saline|const"~"Anadromous",
+                            cluster=="FW int saline|shift"~"Anadromous",
+                            cluster=="FW high saline|shift"~"Anadromous",
+                            cluster=="FW high saline|const"~"Trans-habitat",
+                            cluster=="BW Low saline|shift"~"Trans-habitat",
+                            cluster=="BW int saline|cold"~"BW-resident",
+                            cluster=="BW high saline|cold"~"BW-resident",
+                            cluster=="BW high saline|warm"~"BW-resident"))
 
 #jackknife reclassification
-lda.m2 <- lda(clust~Sr_orig+Sr_juv+Sr_adult+d18O_res_orig+d18O_res_juv+d18O_res_adult, 
+lda.m2 <- lda(cluster~Sr_orig+Sr_juv+Sr_adult+d18O_res_orig+d18O_res_juv+d18O_res_adult, 
               data = Series3, CV=TRUE)
 
 Series3$jacknife <- lda.m2$class
-summary <- Series3 %>% summarise(clust=clust,
-                      jackknife=jacknife,
-                      lda.error=mean(clust != jacknife))
+summary <- Series3 %>% dplyr::summarise(cluster=cluster,
+                                        jackknife=jacknife,
+                                        lda.error=mean(cluster != jacknife))
 ```
 
 # Genotypes
@@ -1885,7 +1760,7 @@ ggsave("Figures/MS/Ecotypes_genetic_clusters_k3.pdf", allplot2,
        width = 15, height = 15, units = "cm", dpi = 600, bg = "white")
 ```
 
-```{r hard cluster assignment}
+```{r hard cluster assignment, include=FALSE, eval=FALSE}
 rm(list = ls())
 
 substrRight <- function(x, n){
@@ -1946,14 +1821,14 @@ Hardclusts <- ggplot(Otogen2, aes(hardclust, fill = ecotype))+geom_bar(position 
 		  axis.text.y = element_text(size = 10, colour = "black"),
 		  axis.text.x = element_text(size = 10, colour = "black"),
 		  legend.text = element_text(size = 10))+
-  labs(x="genotype", y="proportion", fill="ecotype")
+  labs(x="genotype", y="proportion", fill="phenotype")
 
-ggsave("Figures/supplement/Ecotypes-genetic-clusters-k3_hard-assigned.pdf", Hardclusts, 
+ggsave("Figures/supplement/phenotypes-genetic-clusters-k3_hard-assigned.pdf", Hardclusts, 
        width = 15, height = 9, units = "cm", dpi = 600, bg = "white")
 ```
 
 ```{r MANOVA genetics, include=FALSE, eval=FALSE}
-#Test genetic structuring by ecotype
+#Test genetic structuring by phenotype
 Otogen2 <- Otogen%>%
   transmute(ID=ID,
             ecotype=ecotype,
@@ -2253,6 +2128,7 @@ pikes2 <- pikes%>%
             sex=as.factor(sex),
             lifeyear=lifeyear,
             inc_um=inc_um,
+            rad_um=rad_um,
             res_mean=as.numeric(scale(res_mean)),
             Sr_mean=as.numeric(scale(Sr_mean)))%>%
   drop_na(res_mean, Sr_mean)
@@ -2494,7 +2370,7 @@ Temp <- ggplot(pikes2, aes(res_mean, log(inc_um), color=agefact2))+
                size=3, arrow = arrow(length = unit(0.18, "inches")),
                color="#66CCCC")+
   annotation_custom(grob = text_grob(label = "colder", 
-                                     rot = 0, face = "bold", size = 15),
+                                     rot = 0, face = "plain", size = 13),
                                      ymin=3.22, ymax=3.22,
                                      xmin=0, xmax=2.5)+
   geom_segment(x=0, y=3.2, xend=-2.5, yend=3.2, 
@@ -2502,11 +2378,9 @@ Temp <- ggplot(pikes2, aes(res_mean, log(inc_um), color=agefact2))+
                size=3, arrow = arrow(length = unit(0.18, "inches")),
                color="#FF6666")+
   annotation_custom(grob = text_grob(label = "warmer", 
-                                     rot = -0, face = "bold", size = 15),
+                                     rot = -0, face = "plain", size = 13),
                                      ymin=3.22, ymax=3.22,
                                      xmin=0, xmax=-2.5)
-
-ggsave("Figures/MS/Temperature-effect-growth.png", Temp, width = 16, height = 8, units = "cm", dpi = 600, bg = "white")
 
 Sal <- ggplot(pikes2, aes(Sr_mean, log(inc_um), color=agefact2))+
   geom_point(size=.5)+
@@ -2535,7 +2409,7 @@ Sal <- ggplot(pikes2, aes(Sr_mean, log(inc_um), color=agefact2))+
                size=3, arrow = arrow(length = unit(0.18, "inches")),
                color="darkorange")+
   annotation_custom(grob = text_grob(label = "higher salinity", 
-                                     rot = 0, face = "bold", size = 15),
+                                     rot = 0, face = "plain", size = 13),
                                      ymin=3.22, ymax=3.22,
                                      xmin= 0.5, xmax=1.5)+
   geom_segment(x=0, y=3.2, xend=-2, yend=3.2, 
@@ -2543,11 +2417,14 @@ Sal <- ggplot(pikes2, aes(Sr_mean, log(inc_um), color=agefact2))+
                size=3, arrow = arrow(length = unit(0.18, "inches")),
                color="lightblue")+
   annotation_custom(grob = text_grob(label = "lower salinity", 
-                                     rot = -0, face = "bold", size = 15),
+                                     rot = -0, face = "plain", size = 13),
                                      ymin=3.22, ymax=3.22,
                                      xmin= -0.5, xmax= -1.5)
 
-ggsave("Figures/MS/Salinity-effect-growth.png", Sal, width = 16, height = 9, units = "cm", dpi = 600, bg = "white")
+Tempsal <- ggarrange(Temp, Sal, nrow = 1, labels = c("A", "B"), common.legend = T)
+
+ggsave("Figures/MS/Temperature-Salinity-effect-growth.png", Tempsal,
+       width = 16, height = 9, units = "cm", dpi = 600, bg = "white")
 ```
 
 ```{r figure for phenotye effect, eval=FALSE}
@@ -2585,7 +2462,7 @@ Newdata2$phenotype <- fct_relevel(Newdata2$phenotype, "FW_resident", "Anadromous
 
 # Create ggplot with boxplots and custom position dodge 
 
-Ecogrowth <- ggplot(Newdata2, aes(factor(lifeyear), prediction, fill=phenotype), alpha=0.6)+
+phenogrowth <- ggplot(Newdata2, aes(factor(lifeyear), prediction, fill=phenotype), alpha=0.6)+
   geom_boxplot(lwd=.5, outlier.shape = NA, width=.6, position = position_dodge(width = NULL), color="black")+
   labs(x="Age (years)", y=expression("predicted increment"~(mu*"m")),
        fill="behavioral phenotype")+
@@ -2609,7 +2486,7 @@ Ecogrowth <- ggplot(Newdata2, aes(factor(lifeyear), prediction, fill=phenotype),
         legend.title = element_text(size = 30, colour = "black"),
         legend.key.size = unit(2.5,"line"))
 
-ggsave("Figures/MS/Phenotype-effects-growth.pdf", Ecogrowth, width = 16, height = 8, dpi = 600, bg = "white")
+ggsave("Figures/MS/Phenotype-effects-growth.pdf", phenogrowth, width = 16, height = 8, dpi = 600, bg = "white")
 ```
 
 ## Lifelong growth
@@ -2617,30 +2494,32 @@ ggsave("Figures/MS/Phenotype-effects-growth.pdf", Ecogrowth, width = 16, height 
 rm(list = ls())
 
 # load data
-pikedata <- read.delim("Data/pike/Pikedata.txt", header = T, stringsAsFactors = F)
+pikedata <- fread("Data/pike/growth/Pikedata_model.csv")
 
 # Cleanup
 growthdata <- pikedata %>%
   transmute(ID = ID,
-            ID2=as.numeric(factor(ID)),
+            ID2 = as.numeric(factor(ID)),
             sex = sex,
-            weight_g = weight_g,
             TL_mm = TL_mm,
             rad_mm = rad_um/1000,
-            area = waterbody,
-            age = age,
+            waterbody = waterbody,
             lifeyear = lifeyear,
-            ecotype_char=case_when(ecotype=="FW_resident"~"FW-resident",
-                                   TRUE~ecotype),
-            ecotype_num=case_when(ecotype=="BW-resident"~4,
-                              ecotype=="FW_resident"~1,
-                              ecotype=="Anadromous"~2,
-                              ecotype=="Trans-habitat"~3))
+            phenotype_char = case_when(phenotype == "FW_resident"~"FW-resident",
+                                   TRUE~phenotype),
+            phenotype_num = case_when(phenotype == "FW_resident" ~ 1,
+                                  phenotype == "Anadromous" ~ 2,
+                                  phenotype == "Trans-habitat" ~ 3,
+                                  phenotype == "BW-resident" ~ 4),
+            genotype_num = case_when(genotype == "1" ~ 1,
+                                     genotype == "2" ~ 2,
+                                     genotype == "3" ~ 3,
+                                     genotype == "U" ~ 4))
 
 fwrite(growthdata, file = "Data/Pike/growth/Pikedata_Stan.csv")
 ```
 
-```{r run model and save output, include=FALSE, eval=FALSE}
+```{r run phenotype model and save output, include=FALSE, eval=FALSE}
 rm(list = ls())
 
 source("Data/pike/growth/funcs.r")
@@ -2652,21 +2531,21 @@ standata_growth = list(
 	Agei = growthdata$lifeyear,
 	N = nrow(growthdata),
 	n_fish = as.integer(max(growthdata$ID2)),
-	n_eco = as.integer(max(growthdata$ecotype_num)),
+	n_pheno = as.integer(max(growthdata$phenotype_num)),
 	fish_id = as.integer(growthdata$ID2))
-fishtable = unique(growthdata[, c("ID2", "ecotype_num")])
+fishtable = unique(growthdata[, c("ID2", "phenotype_num")])
 fishtable = fishtable[order(fishtable$ID2), ]
-standata_growth$eco_id_fish = fishtable$ecotype
+standata_growth$pheno_id_fish = fishtable$phenotype_num
 
-stancode_i = ("Data/pike/growth/gm_gamma_inv.stan")
+stancode_i = ("Data/pike/growth/gm_gamma_inv_phenotype.stan")
 mod_i = stan_model(stancode_i, model_name = "Individual pike growth")
 
 fit_gamma_i = sampling(mod_i, iter = 10000, data = standata_growth, init = init_fun,
 					 control = list(adapt_delta = 0.99, max_treedepth = 20), chains = 4, thin = 5)
 
-saveRDS(fit_gamma_i, "Data/pike/growth/fit_gamma_i_final_TR.rds")
+saveRDS(fit_gamma_i, "Data/pike/growth/fit_gamma_i_phenotype.rds")
 
-p = c("LInf", "tZero", "k", "LInf_eco", "tZero_eco", "k_eco")
+p = c("LInf", "tZero", "k", "LInf_pheno", "tZero_pheno", "k_pheno")
 samps_a = as.array(fit_gamma_i, pars = p)
 
 png("Figures/supplement/trace.png", w = 1500, h = 1500)
@@ -2689,7 +2568,60 @@ colnames(tab) = c("Parameter", "Posterior median", "90% CI")
 knitr::kable(tab)
 ```
 
-```{r figure VB curves, include=FALSE, eval=FALSE}
+```{r run genotype model and save output, include=FALSE, eval=FALSE}
+rm(list = ls())
+
+source("Data/pike/growth/funcs.r")
+growthdata <- fread("Data/Pike/growth/Pikedata_Stan.csv")
+
+#Remove NA
+growthdata <- growthdata%>%
+  drop_na(genotype_num)%>%
+  mutate(ID2 = as.numeric(factor(ID)))
+
+standata_growth = list(
+	Radmm = growthdata$rad_mm, 
+	Agei = growthdata$lifeyear,
+	N = nrow(growthdata),
+	n_fish = as.integer(length(unique(growthdata$ID2))),
+	n_geno = as.integer(max(growthdata$genotype_num, na.rm = T)),
+	fish_id = as.integer(growthdata$ID2))
+fishtable = unique(growthdata[, c("ID2", "genotype_num")])
+fishtable = fishtable[order(fishtable$ID2), ]
+standata_growth$geno_id_fish = fishtable$genotype_num
+
+stancode_i = ("Data/pike/growth/gm_gamma_inv_genotype.stan")
+mod_i = stan_model(stancode_i, model_name = "Individual pike growth")
+
+fit_gamma_i = sampling(mod_i, iter = 10000, data = standata_growth, init = init_fun,
+					 control = list(adapt_delta = 0.99, max_treedepth = 20), chains = 4, thin = 5)
+
+saveRDS(fit_gamma_i, "Data/pike/growth/fit_gamma_i_genotype.rds")
+
+p = c("LInf", "tZero", "k", "LInf_geno", "tZero_geno", "k_geno")
+samps_a = as.array(fit_gamma_i, pars = p)
+
+png("Figures/supplement/trace_geno.png", w = 1500, h = 1500)
+	bayesplot::mcmc_trace(samps_a)
+dev.off()
+png("Figures/supplement/intervals_geno.png", w = 1500, h = 1500)
+	bayesplot::mcmc_intervals(samps_a)
+dev.off()
+
+
+samps = as.matrix(fit_gamma_i, pars = p)
+dat = data.frame(
+	estimate = apply(samps, 2, median),
+	lower = apply(samps, 2, quantile, 0.05),
+	upper = apply(samps, 2, quantile, 0.95)
+)
+tab = cbind(rownames(dat), as.character(signif(dat$estimate, 3)), 
+			paste0("(", signif(dat$lower, 3), ", ", signif(dat$upper, 3), ")"))
+colnames(tab) = c("Parameter", "Posterior median", "90% CI")
+knitr::kable(tab)
+```
+
+```{r figure VB curves phenotype, include=FALSE, eval=FALSE}
 rm(list = ls())
 
 # Ectype codes: 1 = "Brackish resident"; 2 = "Freshwater resident"; 3 = "Anadromous"; 4 = "Cross-habitat"
@@ -2717,22 +2649,22 @@ pl_theme =	theme_classic() +
         plot.title = element_text(size = 20, colour = "black"))
 
 # x is a stanfit
-ecotype_predict = function(x, quants = c(0.5, 0.05, 0.95), names = c("median", "lower", "upper")) {
-	pars_eco = c("LInf_eco", "k_eco", "tZero_eco")
-	samps = as.matrix(x, pars = pars_eco)
+phenotype_predict = function(x, quants = c(0.5, 0.05, 0.95), names = c("median", "lower", "upper")) {
+	pars_pheno = c("LInf_pheno", "k_pheno", "tZero_pheno")
+	samps = as.matrix(x, pars = pars_pheno)
 
-	# list of 4 ecotypes
+	# list of 4 phenotypes
 	# each element is a matrix, 20000 rows (samples) by 15 age increments
-	eco_pr = lapply(0:3, \(i) t(apply(samps[, c(1, 5, 9) + i], 1, Incpredict, Agei = 1:15)))
+	pheno_pr = lapply(0:3, \(i) t(apply(samps[, c(1, 5, 9) + i], 1, Incpredict, Agei = 1:15)))
 
 	# convert to a data table summarizing by quantiles
-	eco_q = lapply(eco_pr, \(x) {
+	pheno_q = lapply(pheno_pr, \(x) {
 		res = data.frame(t(apply(x, 2, quantile, quants)))
 		colnames(res) = names
 		res$Agei = 1:15
 		res
 	})
-	rbindlist(eco_q, idcol = "eco_id")
+	rbindlist(pheno_q, idcol = "pheno_id")
 }
 
 fish_predict = function(x, fish_lookup) {
@@ -2741,24 +2673,24 @@ fish_predict = function(x, fish_lookup) {
 	fish_pr = lapply(0:119, \(i) t(apply(samps_f[, c(1, 121, 241) + i], 1, Incpredict, Agei = 1:15)))
 	fish_m = lapply(fish_pr, \(x) data.frame(fit = apply(x, 2, median), Agei = 1:15))
 	fish_plot = rbindlist(fish_m, idcol = "fish_id")	
-	fish_plot$eco_id = fish_lookup$ecotype_num[match(fish_plot$fish_id, fish_lookup$ID2)]
+	fish_plot$pheno_id = fish_lookup$phenotype_num[match(fish_plot$fish_id, fish_lookup$ID2)]
 	fish_plot
 }
 
-ecotype_curves = function(x, dat) {
-	fish_lookup = unique(dat[, c("ID2", "ecotype_num")])
+phenotype_curves = function(x, dat) {
+	fish_lookup = unique(dat[, c("ID2", "phenotype_num")])
 	fish_lookup = fish_lookup[order(fish_lookup$ID2),]
-	eco_plot = ecotype_predict(x)
+	pheno_plot = phenotype_predict(x)
 	fish_plot = fish_predict(x, fish_lookup)
 	
 pl_curves = list()
 	for(i in 1:4) {
-		pl_curves[[i]] = ggplot(data = eco_plot[eco_id == i]) + 
-			geom_line(data = fish_plot[eco_id == i], aes(x = Agei, y = fit, group = fish_id), color = "grey", size = 0.5, alpha = 0.3) + 
+		pl_curves[[i]] = ggplot(data = pheno_plot[pheno_id == i]) + 
+			geom_line(data = fish_plot[pheno_id == i], aes(x = Agei, y = fit, group = fish_id), color = "grey", size = 0.5, alpha = 0.3) + 
 			geom_ribbon(aes(x = Agei, ymin = lower, ymax = upper), fill = mypallette[i], alpha = 0.5) + 
 			geom_line(aes(x = Agei, y = median), color = mypallette[i], linewidth = 2) + 
 		  ggtitle(mylabel[i])+
-			geom_point(data = dat[dat$ecotype_num == i, ], 
+			geom_point(data = dat[dat$phenotype_num == i, ], 
 					   aes(x = lifeyear, y = rad_mm, group = ID), size = 1, alpha = .9, color="black") + 
 		  ylim(0,3.8)+scale_x_continuous(breaks = seq(1,15,1), labels = c("1","","3","","5","","7","","9","","11","","13","","15"))+
 			pl_theme + labs(x="Age", y="otolith radius (um)")
@@ -2767,74 +2699,231 @@ pl_curves = list()
 	do.call(grid.arrange, pl_curves)
 }
 
-Ecocurves <- ecotype_curves(fit_gamma_i, growthdata)
+phenocurves <- phenotype_curves(fit_gamma_i, growthdata)
 
-Ecocurves2 <- ggarrange(Ecocurves)
+phenocurves2 <- ggarrange(phenocurves)
 
-Ecocurves3 <- annotate_figure(Ecocurves2, 
+phenocurves3 <- annotate_figure(phenocurves2, 
                               bottom = text_grob("Age (years)", rot = 0, size = 20), 
                               left = text_grob(expression("otolith radius"~(mu~"m")), rot = 90, size = 20))
 
-ggsave("Figures/MS/Individual_growth_revised.png", Ecocurves3, width = 15, height = 15, units = "cm", dpi = 600, bg = "white")
+ggsave("Figures/MS/Individual_growth_phenotypes-revised.png", phenocurves3, width = 15, height = 15, units = "cm", dpi = 600, bg = "white")
 ```
 
-```{r lifelong growth analysis evaluation, include=FALSE, eval=FALSE}
+```{r figure VB curves genotype, include=FALSE, eval=FALSE}
+rm(list = ls())
+
+# Genotype codes: 1 = "putative freshwater"; 2 = "putative brackish"; 3 = "putative anadromous"; 4 = "unassigned"
+fit_gamma_i <- readRDS("Data/pike/growth/fit_gamma_i_genotype.rds")
+growthdata <- fread("Data/pike/growth/Pikedata_Stan.csv")
+
+growthdata <- growthdata%>%
+  drop_na(genotype_num)%>%
+  mutate(ID2 = as.numeric(factor(ID)))
+
+
+mypallette <- c("#C5D86D","#004643","#00BFB2","#AF3800")
+mylabel <- c("putative freshwater","putative brackish","putative anadromous", "unassigned")
+
+Incpredict = function(pars, Agei) pars[1] * (1 - exp(-pars[2] * (Agei - (-pars[3]))))
+
+pl_theme =	theme_classic() +
+  theme(panel.grid.major = element_line(),
+        legend.box.background = element_rect(),
+        axis.line = element_line(size = .5, colour = "black", linetype = 1),
+        axis.ticks = element_line(size = .5, colour = "black"),
+        axis.text.x = element_text(size = 18, colour = "black"),
+        axis.text.y = element_text(size = 18, colour = "black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        legend.text = element_text(size = 5),
+        legend.title = element_text(size = 5, face = "bold"),
+        legend.key.size = unit(.5,"line"),
+        legend.position = c(0.3,0.8),
+        plot.title = element_text(size = 15, colour = "black"))
+
+# x is a stanfit
+genotype_predict = function(x, quants = c(0.5, 0.05, 0.95), names = c("median", "lower", "upper")) {
+	pars_geno = c("LInf_geno", "k_geno", "tZero_geno")
+	samps = as.matrix(x, pars = pars_geno)
+
+	# list of 4 genotypes
+	# each element is a matrix, 20000 rows (samples) by 15 age increments
+	geno_pr = lapply(0:3, \(i) t(apply(samps[, c(1, 5, 9) + i], 1, Incpredict, Agei = 1:15)))
+
+	# convert to a data table summarizing by quantiles
+	geno_q = lapply(geno_pr, \(x) {
+		res = data.frame(t(apply(x, 2, quantile, quants)))
+		colnames(res) = names
+		res$Agei = 1:15
+		res
+	})
+	rbindlist(geno_q, idcol = "geno_id")
+}
+
+fish_predict = function(x, fish_lookup) {
+	pars_fish = c("LInf_i", "k_i", "tZero_i")
+	samps_f = as.matrix(x, pars = pars_fish)
+	fish_pr = lapply(0:100, \(i) t(apply(samps_f[, c(1, 102, 203) + i], 1, Incpredict, Agei = 1:15)))
+	fish_m = lapply(fish_pr, \(x) data.frame(fit = apply(x, 2, median), Agei = 1:15))
+	fish_plot = rbindlist(fish_m, idcol = "fish_id")	
+	fish_plot$geno_id = fish_lookup$genotype_num[match(fish_plot$fish_id, fish_lookup$ID2)]
+	fish_plot
+}
+
+genotype_curves = function(x, dat) {
+	fish_lookup = unique(dat[, c("ID2", "genotype_num")])
+	fish_lookup = fish_lookup[order(fish_lookup$ID2),]
+	geno_plot = genotype_predict(x)
+	fish_plot = fish_predict(x, fish_lookup)
+	
+pl_curves = list()
+	for(i in 1:4) {
+		pl_curves[[i]] = ggplot(data = geno_plot[geno_id == i]) + 
+			geom_line(data = fish_plot[geno_id == i], aes(x = Agei, y = fit, group = fish_id), color = "grey", 
+			          size = 0.5, alpha = 0.3) + 
+			geom_ribbon(aes(x = Agei, ymin = lower, ymax = upper), fill = mypallette[i], alpha = 0.5) + 
+			geom_line(aes(x = Agei, y = median), color = mypallette[i], linewidth = 2) + 
+		  ggtitle(mylabel[i])+
+			geom_point(data = dat[dat$genotype_num == i, ], 
+					   aes(x = lifeyear, y = rad_mm, group = ID), size = 1, alpha = .9, color="black") + 
+		  ylim(0,3.8)+scale_x_continuous(breaks = seq(1,15,1), labels = c("1","","3","","5","","7","","9","","11","","13","","15"))+
+			pl_theme + labs(x="Age", y="otolith radius (um)")
+	}
+	pl_curves$nrow = 2
+	do.call(grid.arrange, pl_curves)
+}
+
+genocurves <- genotype_curves(fit_gamma_i, growthdata)
+
+genocurves2 <- ggarrange(genocurves)
+
+genocurves3 <- annotate_figure(genocurves2, 
+                              bottom = text_grob("Age (years)", rot = 0, size = 20), 
+                              left = text_grob(expression("otolith radius"~(mu~"m")), rot = 90, size = 20))
+
+ggsave("Figures/supplement/Individual_growth_genotypes_revised.png", genocurves3, 
+       width = 15, height = 15, units = "cm", dpi = 600, bg = "white")
+```
+
+```{r growth curve evaluation phenotype, include=FALSE, eval=FALSE}
 rm(list = ls())
 #Evaluation of Stan model for individual fish
-fit <- readRDS("Data/fit_gamma_i_final_TR.rds")
+fit <- readRDS("Data/pike/growth/fit_gamma_i_phenotype.rds")
 #write data matrix for plotting
-samples <- as.array(fit, pars=c("LInf_eco", "k_eco", "tZero_eco", "phi"))
+samples <- as.array(fit, pars=c("LInf_pheno", "k_pheno", "tZero_pheno", "phi"))
 head(samples)
 
 #write arrays for eval
-sample_LInf <- as.array(fit, pars = c("LInf_eco"))
-sample_k <- as.array(fit, pars = c("k_eco"))
-sample_tZero <- as.array(fit, pars = c("tZero_eco"))
-sample_phi <- as.array(fit, pars = "phi")
+sample.LInf.pheno <- as.array(fit, pars = c("LInf_pheno"))
+sample.k.pheno <- as.array(fit, pars = c("k_pheno"))
+sample.tZero.pheno <- as.array(fit, pars = c("tZero_pheno"))
+sample.phi.pheno <- as.array(fit, pars = "phi")
 
 #Look at parameter space with intervals
-# mcmc_intervals(sample_LInf)
-# mcmc_intervals(sample_k)
-# mcmc_intervals(sample_tZero)
-# mcmc_intervals(sample_phi)
+mcmc_intervals(sample.LInf.pheno)
+mcmc_intervals(sample.k.pheno)
+mcmc_intervals(sample.tZero.pheno)
+mcmc_intervals(sample.phi.pheno)
 
 #Look at summary stats
-# summary(fit, pars = c("LInf_eco"))
-# summary(fit, pars = c("k_eco"))
-# summary(fit, pars = c("tZero_eco"))
-# summary(fit, pars = c("phi"))
+summary(fit, pars = c("LInf_pheno"))
+summary(fit, pars = c("k_pheno"))
+summary(fit, pars = c("tZero_pheno"))
+summary(fit, pars = c("phi"))
 
 #MCMC combo plots
-png(filename = "Figures/Appendix/histtrace_LInf.png", width = 5000, height = 2500, res = 600)
-mcmc_combo(samples, c("hist", "trace"), pars = c("LInf_eco[1]", "LInf_eco[2]", "LInf_eco[3]", "LInf_eco[4]"))
+png(filename = "Figures/supplement/histtrace_LInf_pheno.png", width = 5000, height = 2500, res = 600)
+mcmc_combo(samples, c("hist", "trace"), pars = c("LInf_pheno[1]", "LInf_pheno[2]", "LInf_pheno[3]", "LInf_pheno[4]"))
 dev.off()
 
-png(filename = "Figures/Appendix/histtrace_k.png", width = 5000, height = 2500, res = 600)
-mcmc_combo(samples, c("hist", "trace"), pars = c("k_eco[1]", "k_eco[2]", "k_eco[3]", "k_eco[4]"))
+png(filename = "Figures/supplement/histtrace_k_pheno.png", width = 5000, height = 2500, res = 600)
+mcmc_combo(samples, c("hist", "trace"), pars = c("k_pheno[1]", "k_pheno[2]", "k_pheno[3]", "k_pheno[4]"))
 dev.off()
 
-png(filename = "Figures/Appendix/histtrace_tZero.png", width = 5000, height = 2500, res = 600)
-mcmc_combo(samples, c("hist", "trace"), pars = c("tZero_eco[1]", "tZero_eco[2]", "tZero_eco[3]", "tZero_eco[4]"))
+png(filename = "Figures/supplement/histtrace_tZero_pheno.png", width = 5000, height = 2500, res = 600)
+mcmc_combo(samples, c("hist", "trace"), pars = c("tZero_pheno[1]", "tZero_pheno[2]", "tZero_pheno[3]", "tZero_pheno[4]"))
 dev.off()
 
-png(filename = "Figures/Appendix/histtrace_phi.png", width = 5000, height = 2500, res = 600)
+png(filename = "Figures/supplement/histtrace_phi_pheno.png", width = 5000, height = 2500, res = 600)
 mcmc_combo(samples, c("hist", "trace"), pars = c("phi"))
 dev.off()
 
 #Pairs plots
-png(filename = "Figures/Appendix/pairs_eco1.png", width = 5000, height = 2500, res = 600)
-pairs(fit, pars = c("LInf_eco[1]", "k_eco[1]", "tZero_eco[1]","phi"))
+png(filename = "Figures/supplement/pairs_pheno1.png", width = 5000, height = 2500, res = 600)
+pairs(fit, pars = c("LInf_pheno[1]", "k_pheno[1]", "tZero_pheno[1]","phi"))
 dev.off()
 
-png(filename = "Figures/Appendix/pairs_eco2.png", width = 5000, height = 2500, res = 600)
-pairs(fit, pars = c("LInf_eco[2]", "k_eco[2]", "tZero_eco[2]", "phi"))
+png(filename = "Figures/supplement/pairs_pheno2.png", width = 5000, height = 2500, res = 600)
+pairs(fit, pars = c("LInf_pheno[2]", "k_pheno[2]", "tZero_pheno[2]", "phi"))
 dev.off()
 
-png(filename = "Figures/Appendix/pairs_eco3.png", width = 5000, height = 2500, res = 600)
-pairs(fit, pars = c("LInf_eco[3]", "k_eco[3]", "tZero_eco[3]", "phi"))
+png(filename = "Figures/supplement/pairs_pheno3.png", width = 5000, height = 2500, res = 600)
+pairs(fit, pars = c("LInf_pheno[3]", "k_pheno[3]", "tZero_pheno[3]", "phi"))
 dev.off()
 
-png(filename = "Figures/Appendix/pairs_eco4.png", width = 5000, height = 2500, res = 600)
-pairs(fit, pars = c("LInf_eco[4]", "k_eco[4]", "tZero_eco[4]", "phi"))
+png(filename = "Figures/supplement/pairs_pheno4.png", width = 5000, height = 2500, res = 600)
+pairs(fit, pars = c("LInf_pheno[4]", "k_pheno[4]", "tZero_pheno[4]", "phi"))
+dev.off()
+```
+
+```{r growth curve evaluation genotype, include=FALSE, eval=FALSE}
+rm(list = ls())
+#Evaluation of Stan model for individual fish
+fit <- readRDS("Data/pike/growth/fit_gamma_i_genotype.rds")
+#write data matrix for plotting
+samples <- as.array(fit, pars=c("LInf_geno", "k_geno", "tZero_geno", "phi"))
+head(samples)
+
+#write arrays for eval
+sample.LInf.geno <- as.array(fit, pars = c("LInf_geno"))
+sample.k.geno <- as.array(fit, pars = c("k_geno"))
+sample.tZero.geno <- as.array(fit, pars = c("tZero_geno"))
+sample.phi.geno <- as.array(fit, pars = "phi")
+
+#Look at parameter space with intervals
+mcmc_intervals(sample.LInf.geno)
+mcmc_intervals(sample.k.geno)
+mcmc_intervals(sample.tZero.geno)
+mcmc_intervals(sample.phi.geno)
+
+#Look at summary stats
+summary(fit, pars = c("LInf_geno"))
+summary(fit, pars = c("k_geno"))
+summary(fit, pars = c("tZero_geno"))
+summary(fit, pars = c("phi"))
+
+#MCMC combo plots
+png(filename = "Figures/supplement/histtrace_LInf_geno.png", width = 5000, height = 2500, res = 600)
+mcmc_combo(samples, c("hist", "trace"), pars = c("LInf_geno[1]", "LInf_geno[2]", "LInf_geno[3]", "LInf_geno[4]"))
+dev.off()
+
+png(filename = "Figures/supplement/histtrace_k_geno.png", width = 5000, height = 2500, res = 600)
+mcmc_combo(samples, c("hist", "trace"), pars = c("k_geno[1]", "k_geno[2]", "k_geno[3]", "k_geno[4]"))
+dev.off()
+
+png(filename = "Figures/supplement/histtrace_tZero_geno.png", width = 5000, height = 2500, res = 600)
+mcmc_combo(samples, c("hist", "trace"), pars = c("tZero_geno[1]", "tZero_geno[2]", "tZero_geno[3]", "tZero_geno[4]"))
+dev.off()
+
+png(filename = "Figures/supplement/histtrace_phi_geno.png", width = 5000, height = 2500, res = 600)
+mcmc_combo(samples, c("hist", "trace"), pars = c("phi"))
+dev.off()
+
+#Pairs plots
+png(filename = "Figures/supplement/pairs_geno1.png", width = 5000, height = 2500, res = 600)
+pairs(fit, pars = c("LInf_geno[1]", "k_geno[1]", "tZero_geno[1]","phi"))
+dev.off()
+
+png(filename = "Figures/supplement/pairs_geno2.png", width = 5000, height = 2500, res = 600)
+pairs(fit, pars = c("LInf_geno[2]", "k_geno[2]", "tZero_geno[2]", "phi"))
+dev.off()
+
+png(filename = "Figures/supplement/pairs_geno3.png", width = 5000, height = 2500, res = 600)
+pairs(fit, pars = c("LInf_geno[3]", "k_geno[3]", "tZero_geno[3]", "phi"))
+dev.off()
+
+png(filename = "Figures/supplement/pairs_geno4.png", width = 5000, height = 2500, res = 600)
+pairs(fit, pars = c("LInf_geno[4]", "k_geno[4]", "tZero_geno[4]", "phi"))
 dev.off()
 ```
