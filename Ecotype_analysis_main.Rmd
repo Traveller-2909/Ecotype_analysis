@@ -6,7 +6,7 @@ output: html_document
 ---
 **This R markdown file contains all relevant analysis steps of the manuscript titled "Ecotype diversification as mechanism for coexistence in extreme environments – the case of northern pike (Esox lucius) in brackish lagoons", including data preparation of elemental transect data, genetics data and growth data (growth data was produced via OtoJ macro of imageJ´s objectJ plugin). Not included are the assignment of element transect data to individual years, raw data preparation of SIMS and LA-ICPMS analysis and plotting of individual-level transects for evaluation of data quality, outliers or vaterite inclusions (indicated by Sr - Mg interaction)**
 
-**All chunks except for the packages chunk have been set to eval = FALSE, all chunks can be run individually**
+**All chunks except for the packages chunk have been set to eval = FALSE, chunks can be run individually by setting eval = TRUE**
 
 **Note that this file has not been optimized for any kind of output, if you wish to produce an html or word document, you may need to adapt figure and table outputs manually**
 
@@ -1586,205 +1586,88 @@ summary <- Series3 %>% dplyr::summarise(cluster=cluster,
                                         lda.error=mean(cluster != jacknife))
 ```
 
-# Genotypes
+# Genotyping for individual pike
+**This section only describes how the output of the individual-level genotyping detailed in section D of the supplementary material was processed for growth analysis and phenotype-genotype matching. For details/code on the analysis process of the SNP panel development, GT-sequencing, STRUCTURE analysis etc., contact Stefan Dennenmoser (stefan.dennenmoser@uni-oldenburg.de), working group ecological genomics, Institute of Biology and Environmental Sciences, Carl von Ossietzky Universität Oldenburg, Carl von Ossietzky-Str. 9-11, 26111 Oldenburg, Germany**
+
 ##Matching phenotype to genotype
-```{r genetics data, include=FALSE, eval=FALSE}
+```{r clean up genotype data, include=FALSE, eval=FALSE}
+#Script to combine phenotype data with genotype assignment probabilities
 rm(list = ls())
 
 substrRight <- function(x, n){
   substr(x, nchar(x)-n+1, nchar(x))
 }
 
+#Load STRUCTURE output file
 geneticsdata <- read.delim("Data/pike/genetics/struct_K3_1_f_clean.txt", sep = "", dec = ".", header = F, stringsAsFactors = F)
 
-#1=Freshwater; 2=brackish; 3=anadromous
+#Load phenotype data
+Otodata <- fread("Data/pike/growth/Pikedata_model.csv")
 
+#Gentypes: 1=Freshwater; 2=brackish; 3=anadromous
 Data <- geneticsdata%>%
   transmute(ID=paste0(sub("_","-",substrRight(V2,8))),
             cluster1=as.numeric(V6),
             cluster2=as.numeric(V7),
-            cluster3=as.numeric(V8))
-  
-
-Otodata <- read.delim("Data/Pike/Pikedata.txt", header = T, stringsAsFactors = F, sep = "\t", dec = ".")
+            cluster3=as.numeric(V8))%>%
+  drop_na()
 
 Otoclusters <- Otodata%>%
   transmute(ID=ID,
-            clust=clust,
-            ecotype=ecotype,
-            waterbody=capt)%>%
+            DTW_cluster=cluster,
+            phenotype=phenotype,
+            waterbody=waterbody)%>%
   distinct()
 
 Otogen <- Data%>%left_join(Otoclusters, by="ID")%>%
   drop_na()
 
-new_df <- Otogen %>%
-  pivot_longer(cols = starts_with("cluster"), 
-               names_to = "cluster", 
-               values_to = "value")
+fwrite(Otogen, "Data/pike/genetics/Phenotype-genotype-three-clusters.csv")
 
 # Reshape the data frame to long format
-df_long <- pivot_longer(Otogen, -c(ID, ecotype, clust, waterbody), names_to = "cluster", values_to = "prob")
-
-# Calculate total probability for each ecotype
-df_total <- aggregate(prob ~ ecotype, df_long, sum)
-
-# Merge total probability with original data frame
-df_long <- merge(df_long, df_total, by = "ecotype")
-
-# Calculate proportion for each cluster and ecotype
-df_long$prop <- df_long$prob.x / df_long$`prob.y`
+df_long <- pivot_longer(Otogen, -c(ID, phenotype, DTW_cluster, waterbody), names_to = "cluster", values_to = "prob")
 
 # Filter data for ecotype "A"
 df_long2 <- df_long%>%
-  transmute(ecotype=ecotype,
+  transmute(phenotype=phenotype,
             ID=ID,
-            clust=clust,
+            DTW_cluster=DTW_cluster,
             waterbody=waterbody,
             cluster=case_when(cluster=="cluster3"~"anadromous",
                               cluster=="cluster2"~"brackish",
                               cluster=="cluster1"~"freshwater"),
-            prob.x=prob.x,
-            prob.y=prob.y,
-            prop=prop)%>%
-  mutate(cluster_lvl=fct_relevel(cluster,
-                                 "freshwater",
-                                 "anadromous",
-                                 "brackish"))
+            ass_prob=prob)
 
-df_F <- subset(df_long2, ecotype == "FW_resident")
-df_A <- subset(df_long2, ecotype == "Anadromous")
-df_T <- subset(df_long2, ecotype == "Trans-habitat")
-df_B <- subset(df_long2, ecotype == "BW-resident")
-
-pl_theme1 =	theme_classic() +
-	theme(panel.grid.major = element_line(),
-		  legend.box.background = element_rect(),
-		  axis.line = element_line(size = .5, colour = "black", linetype = 1),
-		  axis.ticks = element_line(size = .5, colour = "black"),
-		  axis.text.y = element_text(size = 15, colour = "black"),
-		  axis.text.x = element_text(size = 15, colour = "transparent", angle = 90),
-		  legend.text = element_text(size = 15),
-		  axis.title.x = element_blank(),
-		  axis.title.y = element_blank(),
-		  plot.title = element_text(size = 15, colour = "black"),
-		  plot.margin = unit(c(.8,0,-1.4,1), "cm"),
-		  legend.position = "none")
-
-pl_theme2 =	theme_classic() +
-	theme(panel.grid.major = element_line(),
-		  legend.box.background = element_rect(),
-		  axis.line = element_line(size = .5, colour = "black", linetype = 1),
-		  axis.ticks = element_line(size = .5, colour = "black"),
-		  axis.text.y = element_text(size = 15, colour = "transparent"),
-		  axis.text.x = element_text(size = 15, colour = "transparent", angle = 90),
-		  legend.text = element_text(size = 15),
-		  axis.title.x = element_blank(),
-		  axis.title.y = element_blank(),
-		  plot.title = element_text(size = 15, colour = "black"),
-		  plot.margin = unit(c(.8,1,-1.4,0), "cm"),
-		  legend.position = "none")
-
-pl_theme3 =	theme_classic() +
-	theme(panel.grid.major = element_line(),
-		  legend.box.background = element_rect(),
-		  axis.line = element_line(size = .5, colour = "black", linetype = 1),
-		  axis.ticks = element_line(size = .5, colour = "black"),
-		  axis.text.y = element_text(size = 15, colour = "black"),
-		  axis.text.x = element_text(size = 15, colour = "black", angle = 90, vjust = .4, hjust = .95),
-		  legend.text = element_text(size = 15),
-		  axis.title.x = element_blank(),
-		  axis.title.y = element_blank(),
-		  plot.title = element_text(size = 15, colour = "black"),
-		  plot.margin = unit(c(-0.8,0,0,1), "cm"),
-		  legend.position = "none")
-
-pl_theme4 =	theme_classic() +
-	theme(panel.grid.major = element_line(),
-		  legend.box.background = element_rect(),
-		  axis.line = element_line(size = .5, colour = "black", linetype = 1),
-		  axis.ticks = element_line(size = .5, colour = "black"),
-		  axis.text.y = element_text(size = 15, colour = "transparent"),
-		  axis.text.x = element_text(size = 15, colour = "black", angle = 90, vjust = .4, hjust = .95),
-		  legend.text = element_text(size = 15),
-		  axis.title.x = element_blank(),
-		  axis.title.y = element_blank(),
-		  plot.title = element_text(size = 15, colour = "black"),
-		  plot.margin = unit(c(-0.8,1,0,0), "cm"),
-		  legend.position = "none")
-
-# Create stacked bar chart with proportions
-FW <- ggplot(df_F, aes(x = cluster_lvl, y = prob.x, fill = cluster)) +
-  geom_boxplot()+
-  stat_summary(fun=mean, geom="point", shape=18, size=5, color="red", fill="red")+
-  labs(title = "freshwater resident", x = "genotype", y = "Assignment probability (%)")+
-  ylim(0,1)+
-  scale_fill_manual(values = c("#00BFB2", "#004643", "#C5D86D"))+
-  theme_bw()+
-  pl_theme1
-
-Ana <- ggplot(df_A, aes(x = cluster_lvl, y = prob.x, fill = cluster)) +
-  geom_boxplot() +
-  stat_summary(fun=mean, geom="point", shape=18, size=5, color="red", fill="red")+
-  labs(title = "anadromous", x = "Cluster", y = "Proportion") +
-  ylim(0,1)+
-  scale_fill_manual(values = c("#00BFB2", "#004643", "#C5D86D"))+
-  theme_bw()+
-  pl_theme2
-
-Cross <- ggplot(df_T, aes(x = cluster_lvl, y = prob.x, fill = cluster)) +
-  geom_boxplot() +
-  stat_summary(fun=mean, geom="point", shape=18, size=5, color="red", fill="red")+
-  labs(title = "cross-habitat", x = "genotye", y = "Assignment probability (%)") +
-  ylim(0,1)+
-  scale_fill_manual(values = c("#00BFB2", "#004643", "#C5D86D"))+
-  theme_bw()+
-  pl_theme3
-
-BW <- ggplot(df_B, aes(x = cluster_lvl, y = prob.x, fill = cluster)) +
-  geom_boxplot() +
-  stat_summary(fun=mean, geom="point", shape=18, size=5, color="red", fill="red")+
-  labs(title = "brackish resident", x = "genotype", y = "Proportion") +
-  ylim(0,1)+
-  scale_fill_manual(values = c("#00BFB2", "#004643", "#C5D86D"))+
-  theme_bw()+
-  pl_theme4
-
-allplot <- ggarrange(FW, Ana, Cross, BW)
-  
-
-allplot2 <- annotate_figure(allplot, bottom = text_grob("putative genotype", color = "black", size = 15),
-                left = text_grob("Assignment probability", color = "black", size = 15, rot = 90, vjust = 2))
-
-ggsave("Figures/MS/Ecotypes_genetic_clusters_k3.pdf", allplot2, 
-       width = 15, height = 15, units = "cm", dpi = 600, bg = "white")
+fwrite(df_long2, "Data/pike/genetics/Genotype-phenotype-combined.csv")
 ```
 
 ```{r hard cluster assignment, include=FALSE, eval=FALSE}
+#Script to combine phenotype data with discrete genotype based on 0.7 probability treshold
 rm(list = ls())
 
 substrRight <- function(x, n){
   substr(x, nchar(x)-n+1, nchar(x))
 }
 
+#Load STRUCTURE output file
 geneticsdata <- read.delim("Data/pike/genetics/struct_K3_1_f_clean.txt", sep = "", dec = ".", header = F, stringsAsFactors = F)
-#1=Freshwater; 2=brackish; 3=anadromous
 
+#Load phenotype data
+Otodata <- fread("Data/pike/growth/Pikedata_model.csv")
+
+#Genotypes: 1=Freshwater; 2=brackish; 3=anadromous
 Data <- geneticsdata%>%
   transmute(ID=paste0(sub("_","-",substrRight(V2,8))),
             cluster1=as.numeric(V6),
             cluster2=as.numeric(V7),
-            cluster3=as.numeric(V8))
-  
-
-Otodata <- read.delim("Data/Pike/Pikedata.txt", header = T, stringsAsFactors = F, sep = "\t", dec = ".")
+            cluster3=as.numeric(V8))%>%
+  drop_na()
 
 Otoclusters <- Otodata%>%
   transmute(ID=ID,
-            clust=clust,
-            ecotype=ecotype,
-            area=waterbody,
-            waterbody=capt)%>%
+            DTW_cluster=cluster,
+            phenotype=phenotype,
+            waterbody=waterbody)%>%
   distinct()
 
 Otogen <- Data%>%left_join(Otoclusters, by="ID")%>%
@@ -1800,89 +1683,16 @@ Otogen2 <- Otogen%>%
 Otogen2$hardclust <- fct_relevel(Otogen2$hardclust, "1", "3", "2", "U")
 
 fwrite(Otogen2, file = "Data/pike/genetics/discrete-cluster-assignment.csv")
-
-#Test if phenotype is predicted by genotype
-chisq.test(table(Otogen2$ecotype, Otogen2$hardclust))
-
-#Test if genotype is predicted by capture location
-chisq.test(table(Otogen2$area, Otogen2$hardclust))
-
-#Figure for hard assignments
-Hardclusts <- ggplot(Otogen2, aes(hardclust, fill = ecotype))+geom_bar(position = "fill", width = 0.7)+theme_classic()+
-  scale_x_discrete(breaks = c("1","3","2","U"), 
-                   labels=c("freshwater", "anadromous", "brackish" ,"unknown"))+
-  scale_y_continuous(breaks = seq(0,1,0.2), 
-                     labels = c("0,0", "0,2", "0,4", "0,6", "0,8", "1,0"))+
-  scale_fill_manual(breaks = c("Trans-habitat", "FW_resident", "Anadromous", "BW-resident"), 
-                    labels = c("cross-habitat", "anadromous", "freshwater resident", "brackish resident"),
-                    values = c("#F1C40F", "#00BFB2", "#C5D86D", "#004643"))+
-  theme(axis.line = element_line(size = .5, colour = "black", linetype = 1),
-		  axis.ticks = element_line(size = .5, colour = "black"),
-		  axis.text.y = element_text(size = 10, colour = "black"),
-		  axis.text.x = element_text(size = 10, colour = "black"),
-		  legend.text = element_text(size = 10))+
-  labs(x="genotype", y="proportion", fill="phenotype")
-
-ggsave("Figures/supplement/phenotypes-genetic-clusters-k3_hard-assigned.pdf", Hardclusts, 
-       width = 15, height = 9, units = "cm", dpi = 600, bg = "white")
-```
-
-```{r MANOVA genetics, include=FALSE, eval=FALSE}
-#Test genetic structuring by phenotype
-Otogen2 <- Otogen%>%
-  transmute(ID=ID,
-            ecotype=ecotype,
-            cluster1=cluster1,
-            cluster2=cluster2,
-            cluster3=cluster3)
-
-#Test spatial structuring by genotype
-Otogen3 <- Otogen%>%
-  transmute(ID=ID,
-            waterbody=waterbody,
-            cluster1=cluster1,
-            cluster2=cluster2,
-            cluster3=cluster3)
-
-Otogen2$ecotype <- as.factor(Otogen2$ecotype)
-Otogen3$waterbody <- as.factor(Otogen3$waterbody)
-
-Genetics <- mvabund(Otogen2[3:5])
-
-boxplot(Genetics, na.rm=T)
-
-Gendist <- vegdist(Genetics, method = "euclidean", na.rm = T)
-
-#MDS <- metaMDS(Gendist)
-PCA <- prcomp(Genetics)
-
-plot(PCA)
-
-fviz_pca_biplot(PCA, repel = TRUE)
-
-plot(PCA$x[,1], PCA$x[,2], col=factor(Otogen$ecotype))
-
-Disp <- betadisper(Gendist, Otogen2$ecotype)
-anova(Disp)
-
-plot(Disp)
-
-adonis2(Genetics~Otogen2$ecotype, method = "euclidean", permutations = 9999, na.rm=T)
-
-pairwise.perm.manova(Genetics, Otogen2$ecotype, test = c("Pillai", "Wilks",
-  "Hotelling-Lawley", "Roy", "Spherical"), nperm = 999, 
-  progress = TRUE, p.method = "fdr", F = FALSE, R2 = FALSE)
 ```
 
 # Growth analysis of life history phenotypes and genotype
 ## Age-specific growth
 ```{r get clean increment growth data, include=FALSE, eval=FALSE}
-
+#Script combine age readings on pike otoliths from all samples into one data frame and join with individual metadata
 rm(list = ls())
 
 #read in pike data
-Pike1 <- read.delim("C:/Users/timor/Nextcloud2/Boddenhecht/Data/Pike Data/1.pike_data_base_FOR_USERS/1Pike_Latest_Version.txt", 
-                    sep = ";", dec = ".", header = T, stringsAsFactors = F)
+Pike1 <- fread("Data/pike/1Pike_Latest_Version.txt")
 Pike2 <- Pike1%>%
   transmute(ID=case_when(Fish_ID=="BH-91050.2"~"BH-91050",
                          Fish_ID=="BH-51614"&Waterbody=="BAT"~"NA",
@@ -1895,9 +1705,9 @@ Pike2 <- Pike1%>%
             area=Waterbody)
 
 #load in age readings
-pike_increments_2022 <- read.delim("Data/Pike/Sample_2022_oto_increments.txt", header = T, stringsAsFactors = F)
-pike_increments_2021 <- read.delim("Data/Pike/Sample_2021_oto_increments.txt", header = T, stringsAsFactors = F)
-pike_increments_pilot <- read.delim("Data/Pike/Pilot_sample_oto_increments.txt", header = T, stringsAsFactors = F)
+pike_increments_2022 <- read.delim("Data/pike/growth/Sample_2022_oto_increments.txt", header = T, stringsAsFactors = F)
+pike_increments_2021 <- read.delim("Data/pike/growth/Sample_2021_oto_increments.txt", header = T, stringsAsFactors = F)
+pike_increments_pilot <- read.delim("Data/pike/growth/Pilot_sample_oto_increments.txt", header = T, stringsAsFactors = F)
 
 pike_increments_pilot$Sample <- substr(pike_increments_pilot$Sample,3,10)
 
@@ -1971,63 +1781,49 @@ pike_inc2 <- pike_inc%>%
             quality=quality)%>%
   drop_na(lifeyear)
 
-write.table(pike_inc2, file = "Data/pike/growth/Oto_increment_data_with_rad.txt",
-            sep = "\t", dec = ".", row.names = F)
+fwrite(pike_inc2, "Data/pike/growth/Oto_increment_data_with_rad.csv")
 ```
 
-```{r join growth measurements with ecotypes, include=FALSE, eval=FALSE}
-
+```{r join growth measurements with behavioral phenotypes, include=FALSE, eval=FALSE}
+#Script to join element transects, age and increment data with life history phenotypes
 rm(list = ls())
 
-#read in data on increment widths
-pike_inc <- read.delim(file = "Data/Pike/Oto_increment_data_with_rad.txt",
-            sep = "\t", dec = ".", header = T, stringsAsFactors = F)
+#load phenotype data
+allpike_clust <- fread("Data/pike/clustering/Phenotypes-element-transects-all.csv")
 
-#get clustering results
-fishassign_B <- read.delim(file = "Data/Pike/Bcluster_all.txt", 
-                           header = T, stringsAsFactors = F, dec = ".", sep = "\t")
-fishassign_F <- read.delim(file = "Data/Pike/Fcluster_all.txt", 
-                           header = T, stringsAsFactors = F, dec = ".", sep = "\t")
+#load element interpolated element data (years not smoothed over for later means)
+oto_elements <- fread("Data/pike/elements/Oto_LA-to-d18O_interpolation_Sr-corrected.csv")
 
-allpike_clust <- rbind(fishassign_B[,c(1,5)], fishassign_F[,c(1,4)])
+#load increment data
+pike_inc <- fread("Data/pike/growth/Oto_increment_data_with_rad.csv")
 
 #join increment data with clustering results
-allpike_clust <- allpike_clust%>%
-  transmute(ID=ID,
-            clust=clust2,
-            ecotype=case_when(clust=="FW low saline|cold"~"FW_resident",
-                              clust=="FW low saline|shift"~"FW_resident",
-                              clust=="FW int saline|const"~"FW_resident",
-                              clust=="FW int saline|shift"~"Anadromous",
-                              clust=="FW high saline|shift"~"Anadromous",
-                              clust=="FW high saline|const"~"Trans-habitat",
-                              clust=="BW Low saline|shift"~"Trans-habitat",
-                              clust=="BW int saline|cold"~"BW-resident",
-                              clust=="BW high saline|cold"~"BW-resident",
-                              clust=="BW high saline|warm"~"BW-resident"))
+allpike_clust2 <- allpike_clust%>%
+  transmute(ID=fish_ID,
+            cluster=cluster,
+            phenotype=case_when(cluster=="FW low saline|cold"~"FW_resident",
+                              cluster=="FW low saline|shift"~"FW_resident",
+                              cluster=="FW int saline|const"~"FW_resident",
+                              cluster=="FW int saline|shift"~"Anadromous",
+                              cluster=="FW high saline|shift"~"Anadromous",
+                              cluster=="FW high saline|const"~"Trans-habitat",
+                              cluster=="BW Low saline|shift"~"Trans-habitat",
+                              cluster=="BW int saline|cold"~"BW-resident",
+                              cluster=="BW high saline|cold"~"BW-resident",
+                              cluster=="BW high saline|warm"~"BW-resident"))
+
+pike_years <- oto_elements%>%
+  group_by(fish_ID,lifeyear)%>%
+  summarise(ID=fish_ID,
+            lifeyear=as.numeric(lifeyear),
+            res_mean=mean(res, na.rm=T),
+            Sr_mean=mean(Sr, na.rm=T))%>%
+  drop_na()
 
 pikedata <- pike_inc%>%
-  inner_join(allpike_clust, by = "ID")
-
-write.table(pikedata, "Data/Pike/Growthdata_clusters.txt", row.names = F,
-            sep = "\t", dec = ".")
-```
-
-```{r include environmental measurements?, include=FALSE, eval=FALSE}
-#Script to read cleaned environmental data and combine it with pike data
-rm(list = ls())
-
-Lungdata <- read.delim("Data/environment/LUNGdata.txt", header = T, 
-                       stringsAsFactors = F, sep = "\t", dec = ".")
-
-pikedata <- read.delim("Data/Pike/Growthdata_clusters.txt", 
-                        sep = "\t", dec = ".", header = T, stringsAsFactors = F)
-
-
-#Clean up data frames
-pikedata1 <- pikedata%>%
-  transmute(ID=ID,
-            area=case_when(capt=="SB"~"WRB",
+  inner_join(pike_years, by = c("ID", "lifeyear"))%>%
+  inner_join(allpike_clust2, by = c("ID"))%>%
+  mutate(area = case_when(capt=="SB"~"WRB",
                            capt=="KB"~"WRB",
                            capt=="Sehrowbach"~"Tributary",
                            capt=="Ziese"~"Tributary",
@@ -2039,95 +1835,33 @@ pikedata1 <- pikedata%>%
                            capt=="GB"~"GB",
                            capt=="Peene"~"Tributary",
                            capt=="Barthe"~"Tributary",
-                           capt=="Badendycksgraben"~"Tributary"),
-            capt=capt,
-            TL_mm=as.numeric(TL_mm),
-            weight_g=as.numeric(weight_g),
-            sex=as.factor(sex),
-            date=date,
-            age=age,
-            lifeyear=as.numeric(lifeyear),
-            year=as.factor(year),
-            inc_um=as.numeric(increment_um),
-            rad_um=as.numeric(rad_um),
-            total_rad_um=as.numeric(total_rad_um),
-            clust=as.factor(clust),
-            ecotype=as.factor(ecotype))
-
-#Bind together
-
-oto_lowres <- read.delim("Data/Pike/Oto_LA-to-d18O_interpolation_with_res.txt",
-                         header = T, dec = ".", sep = "\t",
-                         stringsAsFactors = F)
-
-pike_years <- oto_lowres%>%
-  group_by(fish_ID,lifeyear)%>%
-  summarise(ID=fish_ID,
-            lifeyear=as.numeric(lifeyear),
-            d18O_mean=mean(d18O, na.rm=T),
-            res_mean=mean(res, na.rm=T),
-            Sr_mean=mean(Sr, na.rm=T),
-            d18O_min=min(d18O, na.rm=T),
-            res_min=min(res, na.rm=T),
-            Sr_min=min(Sr, na.rm=T),
-            d18O_max=max(d18O, na.rm=T),
-            res_max=max(res, na.rm=T),
-            Sr_max=max(Sr, na.rm=T))%>%
-  drop_na()
-
-pikedata2 <- pikedata1%>%left_join(pike_years, by=c("ID", "lifeyear"))%>%
-  transmute(ID=ID,
-            waterbody=area,
-            capt=capt,
-            clust=clust,
-            ecotype=ecotype,
-            age=age,
-            weight_g=weight_g,
-            TL_mm=TL_mm,
-            sex=sex,
-            lifeyear=lifeyear,
-            year=year,
-            inc_um=inc_um,
-            rad_um=rad_um,
-            res_mean=res_mean,
-            res_max=res_max,
-            res_min=res_min,
-            Sr_mean=Sr_mean,
-            Sr_max=Sr_max,
-            Sr_min=Sr_min)%>%
-  drop_na(inc_um,rad_um,year)%>%
+                           capt=="Badendycksgraben"~"Tributary"))%>%
   distinct()
 
-Lungdata$year <- as.factor(Lungdata$year)
-
-pikedata3 <- pikedata2%>%left_join(Lungdata, by=c("waterbody", "year"))
-
-write.table(pikedata3, 
-            file = "Data/pike/Pikedata.txt", 
-            sep = "\t", dec = ".", row.names = F)
+fwrite(pikedata, "Data/pike/growth/Growthdata_element_clusters.csv")
 ```
 
-```{r join data and cleanup, include=FALSE, message=FALSE, warning=FALSE, echo=FALSE, eval=FALSE}
+```{r join phenotype & genotype & cleanup, include=FALSE, eval=FALSE}
+# cleanup script for GLMM modelling joining phenotype and genotype data
 rm(list = ls())
 
-pikes <- read.delim("Data/pike/Pikedata.txt", header = T, stringsAsFactors = F,
-                    sep = "\t", dec = ".")
+pikedata <- fread("Data/pike/growth/Growthdata_element_clusters.csv")
 
 #Inspect data
-head(pikes)
-tail(pikes)
-str(pikes)
+head(pikedata)
+tail(pikedata)
+str(pikedata)
 
 #Prepare data frame with factors, scale and center element data
-pikes2 <- pikes%>%
+pikes2 <- pikedata%>%
   transmute(ID=ID,
-            waterbody=as.factor(waterbody),
+            waterbody=as.factor(area),
             TL_mm=TL_mm,
-            clust=as.factor(clust),
-            phenotype=as.factor(ecotype),
+            cluster=as.factor(cluster),
+            phenotype=as.factor(phenotype),
             sex=as.factor(sex),
             lifeyear=lifeyear,
-            inc_um=inc_um,
+            inc_um=increment_um,
             rad_um=rad_um,
             res_mean=as.numeric(scale(res_mean)),
             Sr_mean=as.numeric(scale(Sr_mean)))%>%
@@ -2180,49 +1914,43 @@ hist(pikes2$Sr_mean, main = "", xlab = "Sr concentration")
 plot(0, xaxt = 'n', yaxt = 'n', bty = 'n', pch = '', ylab = '', xlab = '')
 ```
 
-Model form
-$$log10(Inc) \sim Age*phenotype+Age*genotype+d18Ores+Srmean+turbidity+salinity+WT+P+Sex+(1|Loc/ID)$$
-
-```{r decide age effect, include=FALSE, eval=FALSE}
+```{r decide on age effect, include=FALSE, eval=FALSE}
+# Check which allometric scaling expoonent works best on age
 rm(list = ls())
 
 #read in model data
-pikes2 <- fread("Data/pike/growth/Pikedata_model.csv")
+pikes <- fread("Data/pike/growth/Pikedata_model.csv")
 
 #Run model
-pikemodel.1 <- lmer(log10(inc_um)~res_mean+lifeyear*phenotype+lifeyear*genotype+exp(-lifeyear)+Sr_mean+sex+(1|ID),
-                    REML = F, data = pikes2)
-pikemodel.1.1 <- lmer(log10(inc_um)~res_mean+lifeyear*phenotype+lifeyear*genotype+I(lifeyear^2)+Sr_mean+sex+(1|ID),
-                    REML = F, data = pikes2)
+pikemodel.1 <- lmer(log10(inc_um)~lifeyear+exp(-lifeyear)+sex+res_mean+Sr_mean+lifeyear*phenotype+lifeyear*genotype+(1|ID),
+                    REML = F, data = pikes)
+pikemodel.1.1 <- lmer(log10(inc_um)~lifeyear+I(lifeyear^2)+sex+res_mean+Sr_mean+lifeyear*phenotype+lifeyear*genotype+(1|ID),
+                    REML = F, data = pikes)
 
 anova(pikemodel.1, pikemodel.1.1)
-summary(pikemodel.1)
 #Quadratic term has lower AIC and residuals look better
-```
- 
-$$log10(Inc) \sim Age*d18Ores+cluster+Age^2+Srmean+Sex+(1|Location)$$
 
-```{r variance inflation factors, echo=TRUE, eval=FALSE}
-#Look at variance inflation factors
-pikemodel.1<- lmer(log10(inc_um)~res_mean+lifeyear*phenotype+lifeyear*genotype+I(lifeyear^2)+Sr_mean+sex+(1|ID),
-                    REML = F, data = pikes2)
+summary(pikemodel.1)
 
-pike.vif <- vif(pikemodel.1)
+#Check variance inflation factors
+pike.vif <- vif(pikemodel.1.1)
 
-barplot(pike.vif[,3], main = "VIF values", horiz = F, col = "darkgreen", ylim = c(0,6),
+barplot(pike.vif[,3], main = "VIF values", horiz = F, col = "darkgreen", ylim = c(0,10),
         las = 2)
 abline(h = 5, lwd = 3, lty = 2, col="red")
+# Lifeyear (age) crosses a VIF of 5, as it is obviously autocorrelated with age^2, which we deemed acceptable in the context
+# of our model, as we aimed only at accounting for allometry, not evaluate the effect of age directly
 ```
 
 ```{r test effects, echo=TRUE, eval=FALSE}
 rm(list = ls())
 
 #read in model data
-pikes2 <- fread("Data/pike/growth/Pikedata_model.csv")
+pikes <- fread("Data/pike/growth/Pikedata_model.csv")
 
 #run model
 pikemodel.1<- lmer(log10(inc_um)~res_mean+lifeyear*phenotype+lifeyear*genotype+I(lifeyear^2)+Sr_mean+sex+(1|ID),
-                    REML = F, data = pikes2)
+                    REML = F, data = pikes)
 
 #Test random effects
 rand(pikemodel.1)
@@ -2239,9 +1967,9 @@ pikemodel.nogen <- update(pikemodel.1, ~.-lifeyear*genotype)
 
 anova(pikemodel.1, pikemodel.nogen)
 
-#New model without genotype
+#New model with genotype removed
 pikemodel.1.1 <- lmer(log10(inc_um)~res_mean+lifeyear*phenotype+I(lifeyear^2)+Sr_mean+sex+(1|ID),
-                    REML = F, data = pikes2)
+                    REML = F, data = pikes)
 
 #Test random effects
 rand(pikemodel.1.1)
@@ -2281,10 +2009,10 @@ anova(pikemodel.1.1, pikemodel.nosex)
 rm(list = ls())
 
 #read in model data
-pikes2 <- fread("Data/pike/growth/Pikedata_model.csv")
+pikes <- fread("Data/pike/growth/Pikedata_model.csv")
 
 pikemodel.final <- lmer(log10(inc_um)~res_mean+lifeyear*phenotype+I(lifeyear^2)+Sr_mean+sex+(1|ID),
-                    REML = F, data = pikes2)
+                    REML = F, data = pikes)
 
 summary(pikemodel.final)
 sd(resid(pikemodel.final))
@@ -2296,13 +2024,13 @@ tab_model(pikemodel.final, show.fstat = T, show.loglik = T, digits.re = 20, show
 rm(list = ls())
 
 #read in model data
-pikes2 <- fread("Data/pike/growth/Pikedata_model.csv")
+pikes <- fread("Data/pike/growth/Pikedata_model.csv")
 
 #validation
 pikemodel.final <- lmer(log10(inc_um)~res_mean+lifeyear*phenotype+I(lifeyear^2)+Sr_mean+sex+(1|ID),
-                    REML = F, data = pikes2)
+                    REML = F, data = pikes)
 
-pikes2$resid <- resid(pikemodel.final)
+pikes$resid <- resid(pikemodel.final)
 
 png(filename = "Figures/supplement/S2_residual_plot.png", width = 5000, height = 2500, res = 600)
 plot(pikemodel.final, xlab = "Fitted", ylab = "Residuals")
@@ -2330,21 +2058,21 @@ dev.off()
 ```{r figures for abiotic main effects, eval=FALSE}
 rm(list = ls())
 
-pikes2 <- fread("Data/pike/growth/Pikedata_model.csv")
+pikes <- fread("Data/pike/growth/Pikedata_model.csv")
 
 #factorize temperature
-pikes2$agefact <- ifelse(pikes2$lifeyear<3, 2, 
-                         ifelse(pikes2$lifeyear>2&pikes2$lifeyear<7, 1,
-                                ifelse(pikes2$lifeyear>6, 3, NA)))
+pikes$agefact <- ifelse(pikes$lifeyear<3, 2, 
+                         ifelse(pikes$lifeyear>2&pikes$lifeyear<7, 1,
+                                ifelse(pikes$lifeyear>6, 3, NA)))
 
-pikes2$agefact2 <- factor(pikes2$agefact,levels = c(2,1,3),
+pikes$agefact2 <- factor(pikes$agefact,levels = c(2,1,3),
                                             labels = c("0-2 years", "3-6 years", 
                                                        "> 6 years"))
 
 mypallette <- viridis::viridis(4, direction = -1)
 
 #Temperature effect
-Temp <- ggplot(pikes2, aes(res_mean, log(inc_um), color=agefact2))+
+Temp <- ggplot(pikes, aes(res_mean, log(inc_um), color=agefact2))+
   geom_point(size=.5)+
   stat_smooth(method = "lm", fill="gray", fullrange = T, lwd=.8)+
   labs(x=expression("scaled"~delta^18*"O"~("z-score")), 
@@ -2382,7 +2110,7 @@ Temp <- ggplot(pikes2, aes(res_mean, log(inc_um), color=agefact2))+
                                      ymin=3.22, ymax=3.22,
                                      xmin=0, xmax=-2.5)
 
-Sal <- ggplot(pikes2, aes(Sr_mean, log(inc_um), color=agefact2))+
+Sal <- ggplot(pikes, aes(Sr_mean, log(inc_um), color=agefact2))+
   geom_point(size=.5)+
   stat_smooth(method = "lm", fill="gray", fullrange = T, lwd=.8)+
   labs(x=expression("scaled"~"Sr/Ca"~("z-score")), 
@@ -2427,22 +2155,22 @@ ggsave("Figures/MS/Temperature-Salinity-effect-growth.png", Tempsal,
        width = 16, height = 9, units = "cm", dpi = 600, bg = "white")
 ```
 
-```{r figure for phenotye effect, eval=FALSE}
+```{r figure for phenotye effect, eval=TRUE}
 rm(list = ls())
 
-pikes2 <- fread("Data/pike/growth/Pikedata_model.csv")
+pikes <- fread("Data/pike/growth/Pikedata_model.csv")
 
 pikemodel.final <- lmer(log10(inc_um)~res_mean+lifeyear*phenotype+I(lifeyear^2)+Sr_mean+sex+(1|ID),
-                    REML = F, data = pikes2)
+                    REML = F, data = pikes)
 
 mypalette1 <- adjustcolor(c("#004643","#00BFB2","#F1C40F","#C5D86D","#AF3800"), alpha.f = 0.6)
 
-lifeyear <- unique(pikes2$lifeyear)
-phenotype <- unique(pikes2$phenotype)
-genotype <- unique(pikes2$genotype)
-res_mean <- seq(min(pikes2$res_mean), max(pikes2$res_mean), 0.1)
-Sr_mean <- seq(min(pikes2$Sr_mean), max(pikes2$res_mean),0.1)
-sex <- unique(pikes2$sex)
+lifeyear <- unique(pikes$lifeyear)
+phenotype <- unique(pikes$phenotype)
+genotype <- unique(pikes$genotype)
+res_mean <- seq(min(pikes$res_mean), max(pikes$res_mean), 0.1)
+Sr_mean <- seq(min(pikes$Sr_mean), max(pikes$res_mean),0.1)
+sex <- unique(pikes$sex)
 ID <- "NA"
 
 Newdata <- expand.grid(lifeyear=lifeyear, phenotype=phenotype, genotype=genotype, res_mean=res_mean, Sr_mean=Sr_mean, sex=sex, ID=ID)
@@ -2451,10 +2179,10 @@ head(Newdata)
 Newdata$prediction <- 10^(predict(pikemodel.final, newdata = Newdata, allow.new.levels=TRUE, type="response"))
 
 Newdata2 <- Newdata%>%
-  mutate(keep=case_when(phenotype=="FW_resident"&lifeyear<=max(pikes2[pikes2$phenotype=="FW_resident",]$lifeyear)~1,
-                   phenotype=="Anadromous"&lifeyear<=max(pikes2[pikes2$phenotype=="Anadromous",]$lifeyear)~1,
-                   phenotype=="BW-resident"&lifeyear<=max(pikes2[pikes2$phenotype=="BW-resident",]$lifeyear)~1,
-                   phenotype=="Trans-habitat"&lifeyear<=max(pikes2[pikes2$phenotype=="Trans-habitat",]$lifeyear)~1,
+  mutate(keep=case_when(phenotype=="FW_resident"&lifeyear<=max(pikes[pikes$phenotype=="FW_resident",]$lifeyear)~1,
+                   phenotype=="Anadromous"&lifeyear<=max(pikes[pikes$phenotype=="Anadromous",]$lifeyear)~1,
+                   phenotype=="BW-resident"&lifeyear<=max(pikes[pikes$phenotype=="BW-resident",]$lifeyear)~1,
+                   phenotype=="Trans-habitat"&lifeyear<=max(pikes[pikes$phenotype=="Trans-habitat",]$lifeyear)~1,
                    TRUE~0))%>%
            filter(keep==1)
 
@@ -2927,3 +2655,255 @@ png(filename = "Figures/supplement/pairs_geno4.png", width = 5000, height = 2500
 pairs(fit, pars = c("LInf_geno[4]", "k_geno[4]", "tZero_geno[4]", "phi"))
 dev.off()
 ```
+
+# Phenotype - genotype matching
+## Testing the association of phenotype and genotype and capture location and genotype
+```{r Distribution tests of phenotype-genotype match, include=FALSE, eval=FALSE}
+#Script to assess the association of genotype with behavioral phenotype and capture location
+#Genotypes: 1=Freshwater; 2=brackish; 3=anadromous
+rm(list = ls())
+
+#Load phenotype-genotype data with assignment probabilities
+Otogen_prob <- fread("Data/pike/genetics/Phenotype-genotype-three-clusters.csv")
+
+#Load phenotype-gentype data with discrete genotype assignments
+Otogen_discrete <- fread("Data/pike/genetics/discrete-cluster-assignment.csv")
+
+#Test if phenotype is predicted by genotype
+chisq.test(table(Otogen_discrete$phenotype, Otogen_discrete$hardclust))
+#phenotype highly significant
+
+#Test if genotype is predicted by capture location
+chisq.test(table(Otogen_discrete$waterbody, Otogen_discrete$hardclust))
+#Capture location highly significant, note that this may include simply the probability of being captured in freshwater as
+#a freshwater genotype, so not necessarily reflecting isolation by distance, but rather type of habitat
+
+#genetic structuring by phenotype
+Otogen_prob2 <- Otogen_prob%>%
+  transmute(ID=ID,
+            phenotype=phenotype,
+            cluster1=as.numeric(cluster1),
+            cluster2=as.numeric(cluster2),
+            cluster3=as.numeric(cluster3))
+
+#genetic structuring by capture location
+Otogen_prob3 <- Otogen_prob%>%
+  transmute(ID=ID,
+            waterbody=waterbody,
+            cluster1=as.numeric(cluster1),
+            cluster2=as.numeric(cluster2),
+            cluster3=as.numeric(cluster3))
+
+#Turn predictor variable into factor
+Otogen_prob2$phenotype <- as.factor(Otogen_prob2$phenotype)
+Otogen_prob3$waterbody <- as.factor(Otogen_prob3$waterbody)
+
+#mvabund() will only work on data frames
+Otogen_prob2 <- as.data.frame(Otogen_prob2)
+Otogen_prob3 <- as.data.frame(Otogen_prob3)
+
+Genetics_pheno <- mvabund(Otogen_prob2[3:5])
+Genetics_loc <- mvabund(Otogen_prob3[3:5])
+
+boxplot(Genetics_pheno, na.rm=T)
+boxplot(Genetics_loc, na.rm=T)
+
+Gendist_pheno <- vegdist(Genetics_pheno, method = "euclidean", na.rm = T)
+Gendist_loc <- vegdist(Genetics_loc, method = "euclidean", na.rm = T)
+
+#Check out structure with PCA
+PCA_pheno <- prcomp(Genetics_pheno)
+PCA_loc <- prcomp(Genetics_loc)
+
+plot(PCA_pheno)
+plot(PCA_loc)
+
+fviz_pca_biplot(PCA_pheno, repel = TRUE)
+fviz_pca_biplot(PCA_loc, repel = TRUE)
+
+plot(PCA_pheno$x[,1], PCA_pheno$x[,2], col=factor(Otogen_prob2$phenotype))
+plot(PCA_loc$x[,1], PCA_loc$x[,2], col=factor(Otogen_prob3$waterbody))
+
+#Test assumptions for PERMANOVA
+Disp_pheno <- betadisper(Gendist_pheno, Otogen_prob2$phenotype)
+Disp_loc <- betadisper(Gendist_loc, Otogen_prob3$waterbody)
+anova(Disp_pheno)
+anova(Disp_loc)
+#Distribution of variances differs between groups in both cases, move to visual examination
+plot(Disp_pheno)
+plot(Disp_loc)
+#Large variation in anadromous and freshwater genotype as well as capture location freshwater, therefore testing with
+#PERMANOVA (no assumptions about multivariate normality or variance homogeneity)
+
+adonis2(Genetics_pheno~Otogen_prob2$phenotype, method = "euclidean", permutations = 9999, na.rm=T)
+#Phenotype is highly significant as predictor of genotype assignement probability and explains 51.1% of variance in genotype
+#distribution (R2 = 0.511)
+
+adonis2(Genetics_loc~Otogen_prob3$waterbody, method = "euclidean", permutations = 9999, na.rm=T)
+#Waterbody is highly significant as predictor of genotype assignement probability and explains 54.7% of variance in genotype
+#distribution (R2 = 0.547)
+
+#Pairwise testing to assess between-phenotype differences in genotype distribution
+pairwise.perm.manova(Genetics_pheno, Otogen_prob2$phenotype, test = c("Pillai", "Wilks",
+  "Hotelling-Lawley", "Roy", "Spherical"), nperm = 999, 
+  progress = TRUE, p.method = "fdr", F = FALSE, R2 = FALSE)
+#All significantly different except for anadromous and freshwater resident pike (p = 0.317)
+
+#Pairwise testing to assess between-location differences in genotype distribution
+pairwise.perm.manova(Genetics_loc, Otogen_prob3$waterbody, test = c("Pillai", "Wilks",
+  "Hotelling-Lawley", "Roy", "Spherical"), nperm = 999, 
+  progress = TRUE, p.method = "fdr", F = FALSE, R2 = FALSE)
+#No differences between lagoons, only between tributaries and all lagoons
+```
+## Figures
+```{r phenotype-genotype matching figure assignment probability, include=FALSE, eval=FALSE}
+#Script to show match between observed behavioral phenotypes (inferred by otolith microchemistry) and assignment 
+#probabilities to the 3 genotypes
+rm(list = ls())
+
+#Read in data
+Genotypes <- fread("Data/pike/genetics/Genotype-phenotype-combined.csv")
+
+Genotypes2 <- Genotypes%>%
+  mutate(cluster_lvl=fct_relevel(cluster,
+                                 "freshwater",
+                                 "anadromous",
+                                 "brackish"))
+
+#subset according to behavioral phenotype
+df_F <- subset(Genotypes2, phenotype == "FW_resident")
+df_A <- subset(Genotypes2, phenotype == "Anadromous")
+df_T <- subset(Genotypes2, phenotype == "Trans-habitat")
+df_B <- subset(Genotypes2, phenotype == "BW-resident")
+
+#Graphic params for subplots
+pl_theme1 =	theme_classic() +
+	theme(panel.grid.major = element_line(),
+		  legend.box.background = element_rect(),
+		  axis.line = element_line(size = .5, colour = "black", linetype = 1),
+		  axis.ticks = element_line(size = .5, colour = "black"),
+		  axis.text.y = element_text(size = 15, colour = "black"),
+		  axis.text.x = element_text(size = 15, colour = "transparent", angle = 90),
+		  legend.text = element_text(size = 15),
+		  axis.title.x = element_blank(),
+		  axis.title.y = element_blank(),
+		  plot.title = element_text(size = 15, colour = "black"),
+		  plot.margin = unit(c(.8,0,-1.4,1), "cm"),
+		  legend.position = "none")
+
+pl_theme2 =	theme_classic() +
+	theme(panel.grid.major = element_line(),
+		  legend.box.background = element_rect(),
+		  axis.line = element_line(size = .5, colour = "black", linetype = 1),
+		  axis.ticks = element_line(size = .5, colour = "black"),
+		  axis.text.y = element_text(size = 15, colour = "transparent"),
+		  axis.text.x = element_text(size = 15, colour = "transparent", angle = 90),
+		  legend.text = element_text(size = 15),
+		  axis.title.x = element_blank(),
+		  axis.title.y = element_blank(),
+		  plot.title = element_text(size = 15, colour = "black"),
+		  plot.margin = unit(c(.8,1,-1.4,0), "cm"),
+		  legend.position = "none")
+
+pl_theme3 =	theme_classic() +
+	theme(panel.grid.major = element_line(),
+		  legend.box.background = element_rect(),
+		  axis.line = element_line(size = .5, colour = "black", linetype = 1),
+		  axis.ticks = element_line(size = .5, colour = "black"),
+		  axis.text.y = element_text(size = 15, colour = "black"),
+		  axis.text.x = element_text(size = 15, colour = "black", angle = 90, vjust = .4, hjust = .95),
+		  legend.text = element_text(size = 15),
+		  axis.title.x = element_blank(),
+		  axis.title.y = element_blank(),
+		  plot.title = element_text(size = 15, colour = "black"),
+		  plot.margin = unit(c(-0.8,0,0,1), "cm"),
+		  legend.position = "none")
+
+pl_theme4 =	theme_classic() +
+	theme(panel.grid.major = element_line(),
+		  legend.box.background = element_rect(),
+		  axis.line = element_line(size = .5, colour = "black", linetype = 1),
+		  axis.ticks = element_line(size = .5, colour = "black"),
+		  axis.text.y = element_text(size = 15, colour = "transparent"),
+		  axis.text.x = element_text(size = 15, colour = "black", angle = 90, vjust = .4, hjust = .95),
+		  legend.text = element_text(size = 15),
+		  axis.title.x = element_blank(),
+		  axis.title.y = element_blank(),
+		  plot.title = element_text(size = 15, colour = "black"),
+		  plot.margin = unit(c(-0.8,1,0,0), "cm"),
+		  legend.position = "none")
+
+# Create stacked bar charts of genotype assignment probabilities for each phenotype
+FW <- ggplot(df_F, aes(x = cluster_lvl, y = ass_prob, fill = cluster)) +
+  geom_boxplot()+
+  stat_summary(fun=mean, geom="point", shape=18, size=5, color="red", fill="red")+
+  labs(title = "freshwater resident", x = "genotype", y = "Assignment probability (%)")+
+  ylim(0,1)+
+  scale_fill_manual(values = c("#00BFB2", "#004643", "#C5D86D"))+
+  theme_bw()+
+  pl_theme1
+
+Ana <- ggplot(df_A, aes(x = cluster_lvl, y = ass_prob, fill = cluster)) +
+  geom_boxplot() +
+  stat_summary(fun=mean, geom="point", shape=18, size=5, color="red", fill="red")+
+  labs(title = "anadromous", x = "Cluster", y = "Proportion") +
+  ylim(0,1)+
+  scale_fill_manual(values = c("#00BFB2", "#004643", "#C5D86D"))+
+  theme_bw()+
+  pl_theme2
+
+Cross <- ggplot(df_T, aes(x = cluster_lvl, y = ass_prob, fill = cluster)) +
+  geom_boxplot() +
+  stat_summary(fun=mean, geom="point", shape=18, size=5, color="red", fill="red")+
+  labs(title = "cross-habitat", x = "genotye", y = "Assignment probability (%)") +
+  ylim(0,1)+
+  scale_fill_manual(values = c("#00BFB2", "#004643", "#C5D86D"))+
+  theme_bw()+
+  pl_theme3
+
+BW <- ggplot(df_B, aes(x = cluster_lvl, y = ass_prob, fill = cluster)) +
+  geom_boxplot() +
+  stat_summary(fun=mean, geom="point", shape=18, size=5, color="red", fill="red")+
+  labs(title = "brackish resident", x = "genotype", y = "Proportion") +
+  ylim(0,1)+
+  scale_fill_manual(values = c("#00BFB2", "#004643", "#C5D86D"))+
+  theme_bw()+
+  pl_theme4
+
+allplot <- ggarrange(FW, Ana, Cross, BW)
+  
+
+allplot2 <- annotate_figure(allplot, bottom = text_grob("putative genotype", color = "black", size = 15),
+                left = text_grob("Assignment probability", color = "black", size = 15, rot = 90, vjust = 2))
+
+ggsave("Figures/MS/Ecotypes_genetic_clusters_k3.png", allplot2, 
+       width = 15, height = 15, units = "cm", dpi = 600, bg = "white")
+```
+
+```{r r phenotype-genotype matching figure hard-assigned genotypes, include=FALSE, eval=FALSE}
+#Script to show match between observed behavioral phenotypes and discrete genotype assignements
+rm(list = ls())
+
+#Load iscrete genotype data
+Genotype_discrete <- fread("Data/pike/genetics/discrete-cluster-assignment.csv")
+
+#Figure for hard assignments
+Hardclusts <- ggplot(Genotype_discrete, aes(hardclust, fill = phenotype))+geom_bar(position = "fill", width = 0.7)+theme_classic()+
+  scale_x_discrete(breaks = c("1","3","2","U"), 
+                   labels=c("freshwater", "anadromous", "brackish" ,"unknown"))+
+  scale_y_continuous(breaks = seq(0,1,0.2), 
+                     labels = c("0,0", "0,2", "0,4", "0,6", "0,8", "1,0"))+
+  scale_fill_manual(breaks = c("Trans-habitat", "FW_resident", "Anadromous", "BW-resident"), 
+                    labels = c("cross-habitat", "anadromous", "freshwater resident", "brackish resident"),
+                    values = c("#F1C40F", "#00BFB2", "#C5D86D", "#004643"))+
+  theme(axis.line = element_line(size = .5, colour = "black", linetype = 1),
+		  axis.ticks = element_line(size = .5, colour = "black"),
+		  axis.text.y = element_text(size = 10, colour = "black"),
+		  axis.text.x = element_text(size = 10, colour = "black"),
+		  legend.text = element_text(size = 10))+
+  labs(x="genotype", y="proportion", fill="phenotype")
+
+ggsave("Figures/supplement/phenotypes-genetic-clusters-k3_hard-assigned.pdf", Hardclusts, 
+       width = 15, height = 9, units = "cm", dpi = 600, bg = "white")
+```
+
