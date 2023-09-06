@@ -1,9 +1,9 @@
-//Lifelong growth dynamics of pike ecotypes
+//Lifelong growth dynamics of pike phenotypes
 //Hierarchical design with three levels:
 //   (1) multiple data (otolith annual growth marks) per fish 
-//   (2) several fish per ecotype
-//   (3) several ecotypes
-// Main objective: Looking for differences in Linf and k between the ecotypes
+//   (2) several fish per phenotype
+//   (3) several phenotypes
+// Main objective: Looking for differences in Linf and k between the phenotypes
 functions {
 	real gamm_a(real phi_inv) {
 		return phi_inv;
@@ -27,9 +27,9 @@ data {
 	
 	//groups
 	int<lower=1> n_fish; //number of individual fish
-	int<lower=1> n_eco; //number of ecotypes
+	int<lower=1> n_pheno; //number of phenotypes
 	int<lower=1, upper=n_fish> fish_id [N];
-	int <lower = 1, upper = n_eco> eco_id_fish [n_fish];
+	int <lower = 1, upper = n_pheno> pheno_id_fish [n_fish];
 }
 parameters {
 
@@ -38,10 +38,10 @@ parameters {
 	vector <lower=0> [n_fish] tZero_i; //Age at wich size = 0 at fish level (size can´t be zero, so has to be negative)
 	vector <lower=0> [n_fish] k_i;     //Growth completion parameter at fish level
 
-	// ecotype level
-	vector <lower=0> [n_eco] LInf_eco; //Mean maximum adult size at ecotype level
-	vector <lower=0> [n_eco] tZero_eco;//Age at wich size = 0 at ecotype level
-	vector <lower=0> [n_eco] k_eco;    //Growth completion parameter at ecotype level
+	// phenotype level
+	vector <lower=0> [n_pheno] LInf_pheno; //Mean maximum adult size at phenotype level
+	vector <lower=0> [n_pheno] tZero_pheno;//Age at wich size = 0 at phenotype level
+	vector <lower=0> [n_pheno] k_pheno;    //Growth completion parameter at phenotype level
 
 	//hyperprameters
 	real <lower=0> LInf;     //Baseline expectation for mean maximum adult size
@@ -53,9 +53,9 @@ parameters {
 	real <lower=0> LInf_phi; 
 	real <lower=0> k_phi;    
 	real <lower=0> tZero_phi;
-	vector <lower=0> [n_eco] LInf_eco_phi; 
-	vector <lower=0> [n_eco] k_eco_phi;    
-	vector <lower=0> [n_eco] tZero_eco_phi;
+	vector <lower=0> [n_pheno] LInf_pheno_phi; 
+	vector <lower=0> [n_pheno] k_pheno_phi;    
+	vector <lower=0> [n_pheno] tZero_pheno_phi;
 }
 transformed parameters {
 	vector[N] mu;
@@ -72,16 +72,16 @@ model {
 
 	// fish-level
 	for(i in 1:n_fish) {
-		int eid = eco_id_fish[i];
-		LInf_i[i] ~ gamma(gamm_a(LInf_eco_phi[eid]), gamm_b(LInf_eco[eid], LInf_eco_phi[eid]));
-		tZero_i[i] ~ gamma(gamm_a(tZero_eco_phi[eid]), gamm_b(tZero_eco[eid], tZero_eco_phi[eid]));
-		k_i[i] ~ gamma(gamm_a(k_eco_phi[eid]), gamm_b(k_eco[eid], k_eco_phi[eid]));
+		int eid = pheno_id_fish[i];
+		LInf_i[i] ~ gamma(gamm_a(LInf_pheno_phi[eid]), gamm_b(LInf_pheno[eid], LInf_pheno_phi[eid]));
+		tZero_i[i] ~ gamma(gamm_a(tZero_pheno_phi[eid]), gamm_b(tZero_pheno[eid], tZero_pheno_phi[eid]));
+		k_i[i] ~ gamma(gamm_a(k_pheno_phi[eid]), gamm_b(k_pheno[eid], k_pheno_phi[eid]));
 	}
 
-	// ecotype-level
-	LInf_eco ~ gamma(gamm_a(LInf_phi), gamm_b(LInf, LInf_phi));
-	k_eco ~ gamma(gamm_a(k_phi), gamm_b(k, k_phi));
-	tZero_eco ~ gamma(gamm_a(tZero_phi), gamm_b(tZero, tZero_phi));
+	// phenotype-level
+	LInf_pheno ~ gamma(gamm_a(LInf_phi), gamm_b(LInf, LInf_phi));
+	k_pheno ~ gamma(gamm_a(k_phi), gamm_b(k, k_phi));
+	tZero_pheno ~ gamma(gamm_a(tZero_phi), gamm_b(tZero, tZero_phi));
 	
 	//hyperpriors
 	// LInf ~ normal(2.3, 0.5); //2.3 mm was the largest otolith radius in sample
@@ -92,9 +92,9 @@ model {
 	LInf_phi ~ cauchy(0, 200);
 	tZero_phi ~ cauchy(0, 200);
 	k_phi ~ cauchy(0, 200);
-	LInf_eco_phi ~ cauchy(0, 200);
-	k_eco_phi ~ cauchy(0, 200);
-	tZero_eco_phi ~ cauchy(0, 200);
+	LInf_pheno_phi ~ cauchy(0, 200);
+	k_pheno_phi ~ cauchy(0, 200);
+	tZero_pheno_phi ~ cauchy(0, 200);
 	phi ~ cauchy(0, 200);
 
 	// proposed revisions
