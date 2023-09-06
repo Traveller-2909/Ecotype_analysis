@@ -1586,7 +1586,7 @@ summary <- Series3 %>% dplyr::summarise(cluster=cluster,
                                         lda.error=mean(cluster != jacknife))
 ```
 
-# Genotyping for individual pike
+# Genotyping individual pike
 **This section only describes how the output of the individual-level genotyping detailed in section D of the supplementary material was processed for growth analysis and phenotype-genotype matching. For details/code on the analysis process of the SNP panel development, GT-sequencing, STRUCTURE analysis etc., contact Stefan Dennenmoser (stefan.dennenmoser@uni-oldenburg.de), working group ecological genomics, Institute of Biology and Environmental Sciences, Carl von Ossietzky Universität Oldenburg, Carl von Ossietzky-Str. 9-11, 26111 Oldenburg, Germany**
 
 ##Matching phenotype to genotype
