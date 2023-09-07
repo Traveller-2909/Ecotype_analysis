@@ -1730,8 +1730,8 @@ all_groups <- factor(c(unique(Newdata2$ecotype)))
 
 # Create ggplot with boxplots and custom position dodge 
 
-Agegrowth <- ggplot(Newdata2, aes(factor(lifeyear), prediction, fill=ecotype), alpha=0.6)+
-  geom_boxplot(lwd=.1, outlier.shape = NA, width=.5, position = position_dodge(width = NULL), color="black")+
+Agegrowth <- ggplot(Newdata2, aes(factor(lifeyear), prediction/1000, fill=ecotype), alpha=0.6)+
+  geom_boxplot(lwd=.1, outlier.shape = NA, width=.7, position = position_dodge(width = NULL), color="black")+
   labs(x="Age (years)", y=expression("predicted increment"~(mu*"m")),
        color="ecotype")+
   scale_x_discrete(limits=factor(c(1:11)),
@@ -1744,61 +1744,20 @@ Agegrowth <- ggplot(Newdata2, aes(factor(lifeyear), prediction, fill=ecotype), a
                     labels = c("brackish resident type", "anadromous type","cross-habitat type", "freshwater resident type"))+
   theme_classic()+
   theme(panel.grid.major = element_line(),
-        legend.position = c(.815,.68),
+        legend.position = c(.6,.75),
         legend.background = element_blank(),
         legend.box.background = element_rect(),
-        axis.line = element_line(size = .5, colour = "black", linetype = 1),
+        axis.line = element_line(size = 1, colour = "black", linetype = 1),
         axis.ticks = element_line(size = .5, colour = "black"),
-        axis.text.x = element_text(size = 20, colour = "black"),
-        axis.text.y = element_text(size = 20, color = "black"),
-        axis.title.x = element_text(size = 20, color = "black"),
-        axis.title.y = element_text(size = 20, color = "black"),
-        legend.text = element_text(size = 15, color = "black"),
-        legend.title = element_text(size = 20, color = "black"),
-        legend.key.size = unit(2,"line"))
+        axis.text.x = element_text(size = 18, colour = "black"),
+        axis.text.y = element_text(size = 18, color = "black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        legend.text = element_text(size = 12, color = "black"),
+        legend.title = element_text(size = 15, color = "black"),
+        legend.key.size = unit(.5,"line"))
 
-ggsave("Figures/MS/Ecotype-age-specific-growth.png", Agegrowth, width = 22, height = 10, units = "cm", dpi = 600, bg = "white")
-
-png(filename = "Figures/Ecotype_effects_growth_lifelong.png",width = 3000, height = 1500, res = 600)
-dev.off()
-
-ggplot(Newdata2[Newdata$lifeyear<=9,], aes(Sr_mean, prediction, color=as.factor(lifeyear)))+
-  stat_smooth(method = "lm", fill="gray", fullrange = T, lwd=.8)+
-  labs(x=expression(bold("scaled"~delta^18*"O"~("z-score"))), 
-       y=expression(bold("log increment"~(mu*"m"))),
-       color="ageclass")+
-  scale_color_viridis_d()+
-  theme_classic()+
-  theme(panel.grid.major = element_line(),
-        legend.position = c(.9,.9),
-        legend.background = element_blank(),
-        legend.box.background = element_rect(),
-        axis.line = element_line(size = .5, colour = "black", linetype = 1),
-        axis.ticks = element_line(size = .5, colour = "black"),
-        axis.text = element_text(size = 10, colour = "black"),
-        axis.title.x = element_text(size = 10, face = "bold", 
-                                    margin = margin(t=10)),
-        axis.title.y = element_text(size = 10, face = "bold"),
-        legend.text = element_text(size = 5),
-        legend.title = element_text(size = 10, face = "bold"),
-        legend.key.size = unit(.8,"line"))+
-  coord_cartesian(clip = "off")+
-  geom_segment(x=0, y=3.6, xend=2.5, yend=3.6, 
-               lineend = "butt", linejoin = "mitre",
-               size=2, arrow = arrow(length = unit(0.18, "inches")),
-               color="#66CCCC")+
-  annotation_custom(grob = text_grob(label = "cold", 
-                                     rot = 0, face = "bold", size = 10),
-                                     ymin=3.62, ymax=3.62,
-                                     xmin=0, xmax=2.5)+
-  geom_segment(x=0, y=3.6, xend=-2.5, yend=3.6, 
-               lineend = "butt", linejoin = "mitre",
-               size=2, arrow = arrow(length = unit(0.18, "inches")),
-               color="#FF6666")+
-  annotation_custom(grob = text_grob(label = "warm", 
-                                     rot = -0, face = "bold", size = 10),
-                                     ymin=3.62, ymax=3.62,
-                                     xmin=0, xmax=-2.5)
+ggsave("Figures/MS/Ecotype-age-specific-growth-large.png", Agegrowth, width = 8.8, height = 8, units = "cm", dpi = 600, bg = "white")
 ```
 
 ## Lifelong growth
@@ -1806,7 +1765,7 @@ ggplot(Newdata2[Newdata$lifeyear<=9,], aes(Sr_mean, prediction, color=as.factor(
 rm(list = ls())
 
 # Ectype codes: 1 = "Brackish resident"; 2 = "Freshwater resident"; 3 = "Anadromous"; 4 = "Cross-habitat"
-fit_gamma_i <- readRDS("Data/pike/growth/fit_gamma_i_final_TR.rds")
+fit_gamma_i <- readRDS("Data/pike/growth/fit_gamma_i_phenotype.rds")
 growthdata <- read.delim("Data/Pike/growth/Pikedata_Stan.txt", header = T, stringsAsFactors = F, sep = "\t", dec = ".")
 
 mypallette <- c("#004643","#C5D86D","#00BFB2","#F1C40F")
@@ -1831,7 +1790,7 @@ pl_theme =	theme_classic() +
 
 # x is a stanfit
 ecotype_predict = function(x, quants = c(0.5, 0.05, 0.95), names = c("median", "lower", "upper")) {
-	pars_eco = c("LInf_eco", "k_eco", "tZero_eco")
+	pars_eco = c("LInf_pheno", "k_pheno", "tZero_pheno")
 	samps = as.matrix(x, pars = pars_eco)
 
 	# list of 4 ecotypes
@@ -1885,7 +1844,7 @@ Curves1 <- ecotype_curves(fit_gamma_i, growthdata)
 Curves2 <- annotate_figure(Curves1, left = text_grob(expression("otolith radius"~(mu~"m")), rot = 90, size = 20),
                            bottom = text_grob("Age (years)", size = 20))
 
-ggsave("Figures/MS/Individual-growth-curves.png", Curves2, width = 22, height = 10, dpi = 600, units = "cm", bg = "white")
+ggsave("Figures/MS/Individual-growth-curves-large.png", Curves2, width = 22, height = 22, dpi = 600, units = "cm", bg = "white")
 ```
 
 # Genetics
