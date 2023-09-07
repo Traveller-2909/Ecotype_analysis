@@ -2353,7 +2353,7 @@ knitr::kable(tab)
 rm(list = ls())
 
 # Ectype codes: 1 = "Brackish resident"; 2 = "Freshwater resident"; 3 = "Anadromous"; 4 = "Cross-habitat"
-fit_gamma_i <- readRDS("Data/pike/growth/fit_gamma_i_final_TR.rds")
+fit_gamma_i <- readRDS("Data/pike/growth/fit_gamma_i_phenotype.rds")
 growthdata <- fread("Data/pike/growth/Pikedata_Stan.csv")
 
 mypallette <- c("#C5D86D","#00BFB2","#F1C40F","#004643")
@@ -2435,7 +2435,7 @@ phenocurves3 <- annotate_figure(phenocurves2,
                               bottom = text_grob("Age (years)", rot = 0, size = 20), 
                               left = text_grob(expression("otolith radius"~(mu~"m")), rot = 90, size = 20))
 
-ggsave("Figures/MS/Individual_growth_phenotypes-revised.png", phenocurves3, width = 15, height = 15, units = "cm", dpi = 600, bg = "white")
+ggsave("Figures/MS/Individual_growth_phenotypes-revised_long.png", phenocurves3, width = 15, height = 15, units = "cm", dpi = 600, bg = "white")
 ```
 
 ```{r figure VB curves genotype, include=FALSE, eval=FALSE}
