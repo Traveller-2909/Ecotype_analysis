@@ -49,6 +49,326 @@ options(mc.cores = parallel::detectCores())
 rstan_options(auto_write = TRUE)
 ```
 
+# Temperature and salinity in the study area
+## Environmental data
+```{r ipdw loop data, include=FALSE, eval=FALSE}
+#Scrit to read and process environmental data from mutliple sources
+rm(list = ls())
+
+#LUNGdata: Data measured by Landesamt für Umwelt, naturschutz & Geologie Mecklenburg-Vorpommern (LUNG MV)
+#https://www.lung.mv-regierung.de/ and https://www.umweltkarten.mv-regierung.de/
+#Data time span: 2003 - 2022 monthly measurments (some stations biweekly, in which case values were averaged for month)
+LUNGdata <- read.delim(file = "Data/environment/LUNGdata_clean.txt", sep = "\t", header = T, stringsAsFactors = F)
+
+#Samplingdata: Opportunistic measurements of temperature & salinity taken in the course of sampling events of 
+#project Boddenhecht in the time from 2020 to 2022 (irregular intervals)
+Samplingdata <- read.delim(file = "Data/environment/Samp_Inst_months.txt", sep = "\t", header = T, stringsAsFactors = F)
+
+#Loggerdata: Measurments of temperature and salinty taken by HOBO logger attached acoustic receivers deployed in the
+#study area, for more information on receiver network, see Dhellemmes et al. (2023),
+#https://doi.org/10.1016/j.fishres.2022.106560
+Loggerdata <- read.delim(file = "Data/environment/Logger_month_means.txt", sep = "\t", header = T, stringsAsFactors = F)
+
+#Bring all into same format, LUNG data
+LUNGdata <- LUNGdata%>%
+  ungroup()%>%
+  transmute(name = name,
+            id = id,
+            waterbody = case_when(waterbody=="Sehrower Bach"~"Sehrowbach",
+                                  waterbody=="Westziese"~"Ziese",
+                                  waterbody=="Ostziese"~"Ziese",
+                                  waterbody=="Duvenbaek"~"Duwenbeek",
+                                  TRUE~waterbody),
+            month = month,
+            year = year,
+            Lat = Lat,
+            Long = Long,
+            type = type,
+            turbidity=turbidity,
+            SAL = case_when(waterbody=="Sehrowbach"~mean(Samplingdata[Samplingdata$waterbody=="Sehrowbach",]$SAL),
+                            waterbody=="Barthe"~mean(Samplingdata[Samplingdata$waterbody=="Barthe",]$SAL),
+                            waterbody=="Ziese"~mean(Samplingdata[Samplingdata$waterbody=="Ziese",]$SAL),
+                            waterbody=="Recknitz"~mean(Samplingdata[Samplingdata$waterbody=="Recknitz",]$SAL),
+                            waterbody=="Duwenbeek"~mean(Samplingdata[Samplingdata$waterbody=="Duwenbeek",]$SAL),
+                            waterbody=="Ryck"~mean(Samplingdata[Samplingdata$waterbody=="Ryck",]$SAL),
+                            TRUE~SAL),
+            WT = WT)
+
+#BH sampling
+Samplingdata <- Samplingdata%>%
+  transmute(name = name,
+            id = id,
+            waterbody = waterbody,
+            month = month,
+            year = year,
+            Lat = Lat,
+            Long = Long,
+            type = type,
+            turbidity=NA,
+            SAL = SAL,
+            WT = WT)
+
+#Logger
+Loggerdata <- Loggerdata%>%
+  transmute(name = name,
+            id = id,
+            waterbody = waterbody,
+            month = month,
+            year = year,
+            Lat = Lat,
+            Long = Long,
+            type = type,
+            turbidity=NA,
+            SAL = SAL,
+            WT = WT)
+
+#Filter LUNGdata into lagoons and tributaries
+Tributaries <- LUNGdata%>%
+  filter(waterbody=="Sehrowbach"|waterbody=="Barthe"|waterbody=="Ziese"|waterbody=="Peene")
+Lagoons <- LUNGdata%>%
+  filter(type=="Coast")
+
+#filter sampling data into lagoons and tributaries
+Tributaries2 <- Samplingdata%>%
+  filter(waterbody%in%c("Sehrowbach","Barthe","Ziese","Peene","Badendycksgraben","NHG"))
+Lagoons2 <- Samplingdata%>%
+  filter(!waterbody%in%c("Sehrowbach","Barthe","Ziese","Peene","Badendycksgraben","NHG","Beek","Duwenbeek","Peene","Ryck"))
+
+#filter logger data into lagoons and tributaries
+Tributaries3 <- Loggerdata%>%
+  filter(waterbody%in%c("Sehrowbach","Barthe","Ziese","Peene","Badendycksgraben","NHG"))
+Lagoons3 <- Loggerdata%>%
+  filter(!waterbody%in%c("Sehrowbach","Barthe","Ziese","Peene","Badendycksgraben","NHG","Beek","Duwenbeek","Peene","Ryck"))
+
+#Join
+Tributaries <- rbind(Tributaries, Tributaries2, Tributaries3)
+Lagoons <- rbind(Lagoons, Lagoons2, Lagoons3)
+
+fwrite(Tributaries, "Data/environment/Environmental-params-tributary.csv")
+fwrite(Lagoons, "Data/environment/Environmental-params-lagoon.csv")
+```
+
+```{r ipdw loop, include=FALSE, eval=FALSE}
+#Script to interpolate environmental parameters in the study area using inverse path distance weighted (ipdw) interpolation
+rm(list = ls())
+
+Tributaries <- fread("Data/environment/Environmental-params-tributary.csv")
+Lagoons <- fread("Data/environment/Environmental-params-lagoon.csv")
+
+#We performed the interpolation only with lagoon data, as including the tributaries resulted in unrealisticly high influence
+#of small tributaries (e.g., NHG) on lagoon salinities
+Saldata <- Lagoons%>%
+  filter(year >= 2005)%>%
+  group_by(name, month, year)%>%
+  reframe(name=name,
+          waterbody=waterbody,
+          year=year,
+          month=month,
+          identifier=paste0(as.character(year), "-", as.character(month)),
+          Lat=as.numeric(Lat),
+          Long=as.numeric(Long),
+          type=type,
+          turbidity=round(mean(turbidity),2),
+          SAL=round(mean(SAL),2),
+          WT=round(mean(WT),2))%>%
+  distinct()
+
+#correct typo in sampling point
+Saldata[Saldata$identifier=="2022"&Saldata$waterbody=="SB",]$Long <- 13.15835
+
+#load in receiver for later checking accessibility of rasterstack
+# Rec <- read.csv2("Data/Rec-Arrays_ALL.csv", header = T, 
+#                  stringsAsFactors = F, sep = ",")
+# Rec$Longitude <- as.numeric(Rec$Longitude)
+# Rec$Latitude <- as.numeric(Rec$Latitude)
+# rec_xy <- Rec[,1:2]
+# rec_sp <- SpatialPointsDataFrame(coords = rec_xy, data = Rec, 
+#                                         proj4string = CRS("+init=epsg:4326"))
+# rec_sp <- spTransform(rec_sp, CRS("+proj=utm +zone=33 +ellps=GRS80 
+#                                   +units=m +no_defs"))
+
+library(rgdal)
+library(raster)
+library(ipdw)
+library(spatstat)
+library(sf)
+
+#load in land layer geopackage
+Land <- readOGR("Data/environment/Studyarea_buffered2.gpkg")
+  
+#transform to UTM (meters)
+Land <- spTransform(Land, CRS("+proj=utm +zone=33 +ellps=GRS80 +units=m +no_defs"))
+
+#Prepare ipdw loop, one identifier per month for each year 2005 - 2022
+monthID <- unique(Saldata$identifier)[1]
+
+#empty stacks to fill with interpolated rasters
+raster <- stack()
+mras <- stack()
+
+#Validation object
+validation <- NULL
+
+for (i in 1:length(monthID)) {
+    #select data (month & year through identifier)
+    df <- Saldata[which(Saldata$identifier == monthID[i]),]
+    
+    #generate coordinates, make sure format is Long-Lat
+    xy <- df[,c(7,6)]
+    
+    #convert to spatial points
+    pnts <- SpatialPointsDataFrame(coords = xy, data = df,
+                                   proj4string = CRS("+init=epsg:4326"))
+    pnts <- spTransform(pnts, CRS("+proj=utm +zone=33 +ellps=GRS80 +units=m +no_defs"))
+    
+    #generate costraster, resolution in m
+    costras <- costrasterGen(pnts, Land, extent = "pnts", 
+                             resolution = 250,
+                             projstr = projection(pnts))
+    
+    #mean neighbor distance
+    W <- owin(range(coordinates(pnts)[,1]), range(coordinates(pnts)[,2]))
+    kat.pp <- ppp(coordinates(pnts)[,1], coordinates(pnts)[,2], window = W)
+    mean.neighdist <- mean(nndist(kat.pp))
+    
+    #build grid
+    gridsize <- mean.neighdist*2
+    grainscale.fac <- gridsize/res(costras)[1]
+    gridras <- aggregate(costras, fact = grainscale.fac)
+    gridpol <- rasterToPolygons(gridras)
+    gridpol$value <- row.names(gridpol)
+    
+    #spatial join
+    fulldataset.over <- over(pnts, gridpol)
+    fulldataset.over <- cbind(data.frame(fulldataset.over), 
+                          setNames(data.frame(pnts), c("name",
+                                                       "month",
+                                                       "year",
+                                                       "waterbody",
+                                                       "identifier",
+                                                       "Lat", "Long", "type",
+                                                       "turbidity", "SAL", "WT",
+                                                       "x.utm","y.utm")))
+    #grid selection
+   set.seed(2)
+    gridlev <- unique(fulldataset.over$value)
+    #split in training & validation data sets
+    for (i in seq_along(gridlev)) {
+      activesub <- subset(fulldataset.over, fulldataset.over$value==gridlev[i])
+      selectnum <- gdata::resample(seq_len(nrow(activesub)), 1)
+      if(i == 1){
+        training <- activesub[selectnum,]
+        }
+      else{
+        training <- rbind(training, activesub[selectnum,])
+      }
+    }
+    
+    training <- st_as_sf(training, coords = c("x.utm", "y.utm"))
+    
+    paramlist <- c("SAL")
+    
+    #perform ipdw, set name to month & year
+    ipdw <- ipdw(training, costras, range = mean.neighdist*10, 
+                       paramlist, overlapped = TRUE)
+    ipdw <- setNames(ipdw[[1]], paste(unique(df$year), "Month",unique(df$month)))
+    
+    #error estimation, generate data frame containing measured & interpolated
+    measured.spdf <- data.frame(validate@data[11:14])
+    coordinates(measured.spdf) <- coordinates(validate)
+    
+    #claculate simple measurement error metrics, name after year & month
+    valid.ipdw <- errorGen(ipdw, measured.spdf, measured.spdf@data$SAL)
+    valid.ipdw$id <- paste(unique(df$year),"Month", unique(df$month))
+    
+    #save measurement errors in list
+    validation <- c(validation, valid.ipdw)
+    #save interpolations into rasterstack
+    raster <- stack(raster, ipdw)
+}
+
+plot(Land)
+points(pnts)
+plot(costras)
+points(pnts)
+plot(raster$X2019.Month.1.1.1)
+
+plot(sras2$Spring_2021)
+points(pnts)
+
+ #example for simple error comparison between prediction & measured
+valid <- lm(validation[[2]]$SAL ~ validation[[2]]$predicted)
+
+summary(valid)
+
+plot(validation[[2]]$SAL, validation[[2]]$predicted)
+
+errorGen(ipdw, measured.spdf, measured.spdf@data$SAL,
+  plot = TRUE, title = "IPDW")
+
+#This extracts salinity values from around the receivers and forms a mean
+
+raster::extract(yras, rec_sp, buffer = 500, small = T, fun = mean, na.rm = T)
+
+salras <- tras
+
+#save to RData
+save(sras, file = "Data/Spatial/Output/Translocation_salinity_2021_lowrange.RData")
+save(tras, file = "Data/Spatial/Output/Temp-IPDW-mean-2007-2022_monthly.RData")
+save(raster, file = "Data/Spatial/Output/Turb-IPDW-mean-2007-2022_monthly.RData")
+
+#monthly salinity
+load("Data/Spatial/Output/Salinity-IPDW-all_07-22.RData")
+#monthly temperature
+load("Data/Spatial/Output/Temp-IPDW-mean-2007-2022_monthly.RData")
+#monthly turbidity
+load("Data/Spatial/Output/Turb-IPDW-mean-2007-2022_monthly.RData")
+
+mean_sal <- calc(raster, fun = mean)
+ssd <- calc(raster, fun = sd)
+srange <- calc(sras, fun = range)
+smax <- calc(sras, fun = max)
+
+srange_upper <- srange$layer.2
+
+plot(tras$X2022.Month.10)
+plot(ssd)
+plot(srange_absolute)
+plot(smax)
+
+#yearly temperature
+tmean <- calc(tras, fun = mean)
+trange <- calc(tras, fun = range)
+sdRast <- calc(tras, fun = sd)
+
+trange_absolute <- trange$layer.2-trange$layer.1
+
+plot(raster)
+
+#Write salinity rasters
+writeRaster(mean_sal, "Data/Spatial/Output/Salinity_raster_book_revised", format="GTiff", overwrite=T)
+writeRaster(ssd, "Data/Spatial/Output/Salinity_SD_book_revised", format="GTiff", overwrite=T)
+writeRaster(srange_upper,"Data/Spatial/Output/Sal-ipdw_range_07-22", format="GTiff", overwrite=T)
+writeRaster(smax,"Data/Spatial/Output/Sal-ipdw_max_07-22", format="GTiff", overwrite=T)
+
+#Write Felirasters
+writeRaster(sras$Spring_2021, "Data/Spatial/Output/Translocation_salinity_2021_lowrange", format="raster",
+            overwrite=T)
+writeRaster(sras2$Spring_2021, "Data/Spatial/Output/Translocation_salinity_2021_highrange", format="raster",
+            overwrite=T)
+
+
+
+#Write temperature rasters
+writeRaster(srange_absolute, "Data/Spatial/Output/Sal-ipdw_range_07-22", format="GTiff")
+writeRaster(ssd, "Data/Spatial/Output/Sal-ipdw_sd_07-22", format="GTiff", overwrite=T)
+writeRaster(smean, "Data/Spatial/Output/Sal-ipdw_mean_07-22", format="GTiff", overwrite=T)
+
+
+#Write measuring station shapefile
+rgdal::writeOGR(pnts, dsn = "Data/Spatial/Output", layer = "coords", driver = "ESRI Shapefile")
+plot(pnts)
+```
 # Life history phenotypes
 ## Data prep for niche analysis
 ### Notes on preparation of Sr and d18O data
@@ -410,7 +730,7 @@ for (i in 1:length(IDOto)) {
   title(ylab = list("Sr/Ca ratio (mg/g)", cex = 2, font=2),
         xlab = list("distance from core [um]", cex = 2, font=2), 
         col.lab = "black", line = 1)
-  text(x = 300, y = 0.008, labels = paste(IDOto[i], "-", 
+  text(x = 650, y = 0.008, labels = paste(IDOto[i], "-", 
                                          LA[which(LA$ID == IDOto[i]), "capt",]), 
        cex=3, font=2)
 
