@@ -2534,7 +2534,7 @@ phenogrowth <- ggplot(Newdata2, aes(factor(lifeyear), prediction, fill=phenotype
         legend.title = element_text(size = 30, colour = "black"),
         legend.key.size = unit(2.5,"line"))
 
-ggsave("Figures/MS/Phenotype-effects-growth.pdf", phenogrowth, width = 16, height = 8, dpi = 600, bg = "white")
+ggsave("Figures/MS/Phenotype-effects-growth.png", phenogrowth, width = 16, height = 8, dpi = 600, bg = "white")
 ```
 
 ## Lifelong growth
