@@ -3200,7 +3200,7 @@ ggsave("Figures/MS/Ecotypes_genetic_clusters_k3.png", allplot2,
        width = 15, height = 15, units = "cm", dpi = 600, bg = "white")
 ```
 
-```{r r phenotype-genotype matching figure hard-assigned genotypes, include=FALSE, eval=FALSE}
+```{r phenotype-genotype matching figure hard-assigned genotypes, include=FALSE, eval=FALSE}
 #Script to show match between observed behavioral phenotypes and discrete genotype assignements
 rm(list = ls())
 
@@ -3223,7 +3223,7 @@ Hardclusts <- ggplot(Genotype_discrete, aes(hardclust, fill = phenotype))+geom_b
 		  legend.text = element_text(size = 10))+
   labs(x="genotype", y="proportion", fill="phenotype")
 
-ggsave("Figures/supplement/phenotypes-genetic-clusters-k3_hard-assigned.pdf", Hardclusts, 
+ggsave("Figures/supplement/phenotypes-genetic-clusters-k3_hard-assigned.png", Hardclusts, 
        width = 15, height = 9, units = "cm", dpi = 600, bg = "white")
 ```
 
