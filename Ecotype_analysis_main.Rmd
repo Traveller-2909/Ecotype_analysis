@@ -959,7 +959,7 @@ Groupall <- fread("Data/Pike/clustering/Phenotypes-element-transects-all.csv")
 allpike_pheno <- Groupall%>%
   mutate(phenotype=case_when(cluster=="FW low saline|cold"~"FW-resident",
                              cluster=="FW low saline|shift"~"FW-resident",
-                             cluster=="FW int saline|const"~"FW-resident",
+                             cluster=="FW int saline|const"~"Anadromous",
                              cluster=="FW int saline|shift"~"Anadromous",
                              cluster=="FW high saline|shift"~"Anadromous",
                              cluster=="FW high saline|const"~"Trans-habitat",
