@@ -1581,14 +1581,14 @@ allpike_pheno <- Groupall%>%
                               cluster=="BW high saline|warm"~"BW-resident"))
 
 A <- ggplot(allpike_pheno[allpike_pheno$phenotype=="FW-resident",])+
-  geom_line(aes(dist, Sr*1000, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
-  geom_smooth(aes(dist, Sr*1000), color="black", fill=mypalette[4], 
-              alpha=1, size=.3, method = "gam")+
+  geom_line(aes(dist, Mn/Mg, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
+  geom_smooth(aes(dist, Mn/Mg), color="black", fill=mypalette[4], 
+              alpha=1, size=.5, method = "gam")+
   theme_classic()+
-  ylim(0, 8)+
-  scale_y_continuous(breaks = seq(0,8,1), limits = c(0,8))+
+  ylim(0, 14)+
+  scale_y_continuous(breaks = seq(0,14,2), limits = c(0,14))+
   xlim(0,2100)+
-  labs(y=expression("Sr/Ca (mg/g)"))+
+  labs(y=expression("Mn/Mg (mg/mg)"))+
   theme(legend.position = "none", 
         panel.grid.major.y = element_line(size = .3),
         panel.border = element_rect(fill = NA, size = .3),
@@ -1603,65 +1603,27 @@ A <- ggplot(allpike_pheno[allpike_pheno$phenotype=="FW-resident",])+
         axis.line = element_line(size = 0.3))+
   coord_cartesian(clip = "off")+
   annotation_custom(grob = text_grob(label = "freshwater resident", size = 8, just = "left"),
-                    ymin = 9.3, ymax = 9.3, xmin = -50, xmax = -50)+
+                    ymin = 9.3, ymax = 9.3, xmin = 200, xmax = 200)+
   annotation_custom(grob = text_grob(label = "(N = 27)", size = 8, just = "left"),
-                    ymin = 7.8, ymax = 7.8, xmin = -50, xmax = -50)+
-  geom_segment(x=-450, y=-0.5, xend=-450, yend=8.5, 
+                    ymin = 7.8, ymax = 7.8, xmin = 200, xmax = 200)+
+  geom_segment(x=-450, y=-0.5, xend=-450, yend=14, 
                lineend = "butt", linejoin = "mitre",
                size=2, arrow = arrow(length = unit(0.18, "inches")),
-               color="darkorange")+
-  annotation_custom(grob = text_grob(label = "increasing salinity", 
+               color="red")+
+  annotation_custom(grob = text_grob(label = "increasing hypoxia", 
                                      rot = 90, size = 7),
                                      ymin=0, ymax=8,
                                      xmin=-460, xmax=-460)
 
-A1 <- ggplot(allpike_pheno[allpike_pheno$phenotype=="FW-resident",])+
-  geom_line(aes(dist, res, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
-  geom_smooth(aes(dist, res), color="black", fill=mypalette[4], 
-              alpha=1, size=.3, method = "gam")+
-  theme_classic()+
-  ylim(-3, 3)+
-  xlim(0,2100)+
-  labs(y=expression("scaled"~delta^18*"O"~("VPDB \u2030")))+
-  theme(legend.position = "none", 
-        panel.grid.major.y = element_line(size = .3),
-        panel.border = element_rect(fill = NA, size = .3),
-        plot.margin = margin(c(10,-15,-5,5.5)),
-        axis.text.x = element_text(color = "black", size = 7),
-        axis.text.y = element_text(color = "black", size = 7),
-        axis.ticks.y = element_line(size = 0.3),
-        axis.ticks.length.y = unit(0.05, "cm"),
-        axis.ticks.x = element_line(size = 0.3),
-        axis.title.y = element_text(size = 7, margin = margin(r=10)),
-        axis.title.x = element_blank(),
-        axis.line = element_line(size = 0.3))+
-  coord_cartesian(clip = "off")+
-    geom_segment(x=-450, y=0, xend=-450, yend=-3.2, 
-               lineend = "butt", linejoin = "mitre",
-               size=2, arrow = arrow(length = unit(0.18, "inches")),
-               color="#FF6666")+
-  annotation_custom(grob = text_grob(label = "warmer", 
-                                     rot = 90,, size = 7),
-                                     ymin=0, ymax=-3,
-                                     xmin=-460, xmax=-460)+
-  geom_segment(x=-450, y=0, xend=-450, yend=3, 
-               lineend = "butt", linejoin = "mitre",
-               size=2, arrow = arrow(length = unit(0.18, "inches")),
-               color="#66CCCC")+
-  annotation_custom(grob = text_grob(label = "colder", 
-                                     rot = 90, size = 7),
-                                     ymin=0, ymax=3.2,
-                                     xmin=-460, xmax=-460)
-
 B <- ggplot(allpike_pheno[allpike_pheno$phenotype=="BW-resident",])+
-  geom_line(aes(dist, Sr*1000, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
-  geom_smooth(aes(dist, Sr*1000), color="black", fill=mypalette[1], 
-              alpha=1, size=.3, method = "gam")+
+  geom_line(aes(dist, Mn/Mg, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
+  geom_smooth(aes(dist, Mn/Mg), color="black", fill=mypalette[1], 
+              alpha=1, size=.5, method = "gam")+
   theme_classic()+
-  ylim(0, 8)+
-  scale_y_continuous(breaks = seq(0,8,1), limits = c(0,8))+
+  ylim(0, 14)+
+  scale_y_continuous(breaks = seq(0,14,2), limits = c(0,14))+
   xlim(0,2100)+
-  labs(y=expression("Sr/Ca (mg/g)"))+
+  labs(y=expression("Mn/Mg (mg/mg)"))+
   theme(legend.position = "none", 
         panel.grid.major.y = element_line(size = .3),
         panel.border = element_rect(fill = NA, size = .3),
@@ -1677,42 +1639,19 @@ B <- ggplot(allpike_pheno[allpike_pheno$phenotype=="BW-resident",])+
         plot.background = element_blank())+
   coord_cartesian(clip = "off")+
   annotation_custom(grob = text_grob(label = "brackish resident", size = 8, just = "left"),
-                    ymin = 9.3, ymax = 9.3, xmin = 100, xmax = 100)+
+                    ymin = 9.3, ymax = 9.3, xmin = 200, xmax = 200)+
   annotation_custom(grob = text_grob(label = "(N = 44)", size = 8, just = "left"),
-                    ymin = 7.8, ymax = 7.8, xmin = 100, xmax = 100)
-
-B1 <- ggplot(allpike_pheno[allpike_pheno$phenotype=="BW-resident",])+
-  geom_line(aes(dist, res, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
-  geom_smooth(aes(dist, res), color="black", fill=mypalette[1], 
-              alpha=1, size=.3, method = "gam")+
-  theme_classic()+
-  ylim(-3, 3)+
-  xlim(0,2100)+
-  labs(y=expression("scaled"~delta^18*"O"~("VPDB \u2030")))+
-  theme(legend.position = "none", 
-        panel.grid.major.y = element_line(size = .3),
-        panel.border = element_rect(fill = NA, size = .3),
-        plot.margin = margin(c(10,15,-5,-30)),
-        axis.text.x = element_text(color = "black", size = 7),
-        axis.text.y = element_text(color = "transparent", size = 7),
-        axis.ticks.y = element_line(size = 0.3, colour = "transparent"),
-        axis.ticks.length.y = unit(0.05, "cm"),
-        axis.ticks.x = element_line(size = 0.3),
-        axis.title.y = element_text(size = 7, margin = margin(r=10), colour = "transparent"),
-        axis.title.x = element_blank(),
-        axis.line = element_line(size = 0.3),
-        plot.background = element_blank())+
-  coord_cartesian(clip = "off")
+                    ymin = 7.8, ymax = 7.8, xmin = 200, xmax = 200)
 
 C <- ggplot(allpike_pheno[allpike_pheno$phenotype=="Anadromous",])+
-  geom_line(aes(dist, Sr*1000, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
-  geom_smooth(aes(dist, Sr*1000), color="black", fill=mypalette[2], 
-              alpha=1, size=.3, method = "gam")+
+  geom_line(aes(dist, Mn/Mg, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
+  geom_smooth(aes(dist, Mn/Mg), color="black", fill=mypalette[2], 
+              alpha=1, size=.5, method = "gam")+
   theme_classic()+
-  ylim(0, 8)+
-  scale_y_continuous(breaks = seq(0,8,1), limits = c(0,8))+
+  ylim(0, 14)+
+  scale_y_continuous(breaks = seq(0,14,2), limits = c(0,14))+
   xlim(0,2100)+
-  labs(y=expression("Sr/Ca (mg/g)"))+
+  labs(y=expression("Mn/Mg (mg/mg)"))+
   theme(legend.position = "none", 
         panel.grid.major.y = element_line(size = .3),
         panel.border = element_rect(fill = NA, size = .3),
@@ -1728,40 +1667,17 @@ C <- ggplot(allpike_pheno[allpike_pheno$phenotype=="Anadromous",])+
         plot.background = element_blank())+
   coord_cartesian(clip = "off")+
   annotation_custom(grob = text_grob(label = "anadromous", size = 9, just = "left"),
-                    ymin = 9.3, ymax = 9.3, xmin = 100, xmax = 100)+
+                    ymin = 9.3, ymax = 9.3, xmin = 200, xmax = 200)+
   annotation_custom(grob = text_grob(label = "(N = 21)", size = 8, just = "left"),
-                    ymin = 7.8, ymax = 7.8, xmin = 100, xmax = 100)
-
-C1 <- ggplot(allpike_pheno[allpike_pheno$phenotype=="Anadromous",])+
-  geom_line(aes(dist, res, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
-  geom_smooth(aes(dist, res), color="black", fill=mypalette[2], 
-              alpha=1, size=.3, method = "gam")+
-  theme_classic()+
-  ylim(-3, 3)+
-  xlim(0,2100)+
-  labs(y=expression("scaled"~delta^18*"O"~("VPDB \u2030")))+
-  theme(legend.position = "none", 
-        panel.grid.major.y = element_line(size = .3),
-        panel.border = element_rect(fill = NA, size = .3),
-        plot.margin = margin(c(10,-5,-5,-10)),
-        axis.text.x = element_text(color = "black", size = 7),
-        axis.text.y = element_text(color = "transparent", size = 7),
-        axis.ticks.y = element_line(size = 0.3, colour = "transparent"),
-        axis.ticks.length.y = unit(0.05, "cm"),
-        axis.ticks.x = element_line(size = 0.3),
-        axis.title.y = element_text(size = 7, margin = margin(r=10), colour = "transparent"),
-        axis.title.x = element_blank(),
-        axis.line = element_line(size = 0.3),
-        plot.background = element_blank())+
-  coord_cartesian(clip = "off")
+                    ymin = 7.8, ymax = 7.8, xmin = 200, xmax = 200)
 
 D <- ggplot(allpike_pheno[allpike_pheno$phenotype=="Trans-habitat",])+
-  geom_line(aes(dist, Sr*1000, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
-  geom_smooth(aes(dist, Sr*1000), color="black", fill=mypalette[3], 
+  geom_line(aes(dist, Mn/Mg, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
+  geom_smooth(aes(dist, Mn/Mg), color="black", fill=mypalette[3], 
               alpha=1, size=.3, method = "gam")+
   theme_classic()+
-  ylim(0, 8)+
-  scale_y_continuous(breaks = seq(0,8,1), limits = c(0,8))+
+  ylim(0, 14)+
+  scale_y_continuous(breaks = seq(0,14,2), limits = c(0,14))+
   xlim(0,2100)+
   labs(y=expression(""))+
   theme(legend.position = "none", 
@@ -1779,39 +1695,16 @@ D <- ggplot(allpike_pheno[allpike_pheno$phenotype=="Trans-habitat",])+
         plot.background = element_blank())+
   coord_cartesian(clip = "off")+
   annotation_custom(grob = text_grob(label = "cross-habitat", size = 9, just = "left"),
-                    ymin = 9.3, ymax = 9.3, xmin = 100, xmax = 100)+
+                    ymin = 9.3, ymax = 9.3, xmin = 200, xmax = 200)+
   annotation_custom(grob = text_grob(label = "(N = 28)", size = 8, just = "left"),
-                    ymin = 7.8, ymax = 7.8, xmin = 100, xmax = 100)
-
-D1 <- ggplot(allpike_pheno[allpike_pheno$phenotype=="Trans-habitat",])+
-  geom_line(aes(dist, res, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
-  geom_smooth(aes(dist, res), color="black", fill=mypalette[3], 
-              alpha=1, size=.3, method = "gam")+
-  theme_classic()+
-  ylim(-3, 3)+
-  xlim(0,2100)+
-  labs(y=expression("scaled"~delta^18*"O"~("VPDB \u2030")))+
-  theme(legend.position = "none", 
-        panel.grid.major.y = element_line(size = .3),
-        panel.border = element_rect(fill = NA, size = .3),
-        plot.margin = margin(c(10,5,-5,-20)),
-        axis.text.x = element_text(color = "black", size = 7),
-        axis.text.y = element_text(color = "transparent", size = 7),
-        axis.ticks.y = element_line(size = 0.3, colour = "transparent"),
-        axis.ticks.length.y = unit(0.05, "cm"),
-        axis.ticks.x = element_line(size = 0.3),
-        axis.title.y = element_text(size = 7, margin = margin(r=10), colour = "transparent"),
-        axis.title.x = element_blank(),
-        axis.line = element_line(size = 0.3),
-        plot.background = element_blank())+
-  coord_cartesian(clip = "off")
+                    ymin = 7.8, ymax = 7.8, xmin = 200, xmax = 200)
 
 
-Transects <- ggarrange(A, C, D, B, A1, C1, D1, B1, labels = c("A", "B", "C", "D"), hjust = c(-3.85,-2.6,-1.2,0.15), vjust = c(2,2,2,2), font.label = list(size=10), nrow = 2, ncol = 4)
+Transects <- ggarrange(A, C, D, B, labels = c("A", "B", "C", "D"), hjust = c(-3.85,-2.6,-1.2,0.15), vjust = c(2,2,2,2), font.label = list(size=10), nrow = 1, ncol = 4)
 
 Transects2 <- annotate_figure(Transects, bottom = text_grob(expression("Distance from Core"~(mu~"m")), vjust = 1, size = 7))
 
-ggsave("Figures/MS/Phenotypes-life-history-transects.png", Transects2, dpi = 600, width = 16, height = 8, units = "cm", bg = "white")
+ggsave("Figures/MS/Phenotypes-life-history-transects-hypoxia.png", Transects2, dpi = 600, width = 16, height = 6, units = "cm", bg = "white")
 ```
 
 ```{r dissimilarity test and jackknife reclassification, include=FALSE, eval=FALSE}
