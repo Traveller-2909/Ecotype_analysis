@@ -51,6 +51,7 @@ rstan_options(auto_write = TRUE)
 
 # Temperature and salinity in the study area
 ## Environmental data
+The following two scripts calculate a inverse path weighted distance interpolation of an environmental factor (e.g., temperature, salinity) for the study area and generate a raster of interpolated values. For the Figures in the paper, these rasters were loaded into QGIS v3.14 and maps of the interpolated environmental factors over the study area were produced.
 ```{r ipdw loop data, include=FALSE, eval=FALSE}
 #Scrit to read and process environmental data from mutliple sources
 rm(list = ls())
@@ -370,14 +371,7 @@ rgdal::writeOGR(pnts, dsn = "Data/Spatial/Output", layer = "coords", driver = "E
 plot(pnts)
 ```
 # Life history phenotypes
-## Data prep for niche analysis
-### Notes on preparation of Sr and d18O data
-Five fish excluded: 
-"BH-01701" -> Misplaced transect,
-"BH-01741" -> Vaterite,
-"BH-01908" -> Vaterite,
-"BH-90962" -> Lost during SIMS preprocessing,
-"BH-93190" -> no SIMS transect (lightning strike occurred during analysis)
+## Data cleanup for niche analysis
 ```{r marry d18O data to Sr:Ca data, include=FALSE, eval=FALSE}
 #Script to align Sr:Ca values (5.5 um step size) with d18O values (35 um step size) in a common data frame
 rm(list = ls())
@@ -605,14 +599,26 @@ plot(oto.int2[oto.int2$fish_ID=="BH-01855",]$dist, oto.int2[oto.int2$fish_ID=="B
 #Save data
 fwrite(oto.int2, "Data/pike/elements/Oto_LA-to-d18O_interpolation_Sr-corrected_smooth.csv")
 ```
+
 ## Lifelong niche (individual and population level)
 ```{r calculate profile plots for individuals, include=FALSE, eval=FALSE}
 #Script to calculate individual-level life history plots for individual visual assessment of thermosaline history
 rm(list = ls())
+Otos <- fread("Data/Otolith_Inventure_List_2023_06_17.csv")
 
+Otos2 <- Otos%>%
+  transmute(ID = Fish_ID)%>%
+  inner_join(Pike1)
 #read in raw data
 LA <- fread("Data/pike/elements/Pike-LA-ICPMS-years_whole-sample_with-TL.txt")
 d18O <- fread("Data/pike/elements/Pike-d18O-years_whole-sample_with-TL.txt")
+
+#Check how many SIMS points per year ring
+yearlength <- d18O%>%
+  group_by(fishID)%>%
+  filter(lifeyear < 3)%>%
+  group_by(fishID, lifeyear)%>%
+  transmute(yearlength = length(lifeyear))
 
 #Convert to data frame
 LA <- as.data.frame(LA)
@@ -791,7 +797,7 @@ fwrite(Fgroup, "Data/pike/clustering/Tributary-sample-transects.csv")
 fwrite(Bgroup, "Data/pike/clustering/Lagoon-sample-transects.csv")
 ```
 
-```{r dtw data prep and clustering, include=FALSE, eval=FALSE}
+```{r data prep and DTW clustering, include=FALSE, eval=FALSE}
 #Script to reinterpolate transects to standard length and perform DTW clustering
 rm(list = ls())
 
@@ -894,9 +900,10 @@ save(Fgroup,Bgroup,dataB, dataF, Bseries, Fseries, interpol, clust_B, clust_F, L
      file = "Data/Pike/Adults_hierarchical_clusters.RData")
 ```
 
-```{r cluster assignment hierarchical, include=FALSE, eval=FALSE}
+```{r cluster assignment to individuals, include=FALSE, eval=FALSE}
 rm(list=ls())
 load("Data/Pike/Adults_hierarchical_clusters.RData")
+
 #assign clusters to fish
 fishassign_B1 <- data.frame(fish_ID=names(Bseries), 
                             cluster=factor(clust_B$k_4@cluster, 
@@ -956,6 +963,7 @@ rm(list = ls())
 
 Groupall <- fread("Data/Pike/clustering/Phenotypes-element-transects-all.csv")
 
+#Assign behavioral phenotype based on decision framework (see section C and Figures S4-6 in the supplementary material)
 allpike_pheno <- Groupall%>%
   mutate(phenotype=case_when(cluster=="FW low saline|cold"~"FW-resident",
                              cluster=="FW low saline|shift"~"FW-resident",
@@ -1940,6 +1948,9 @@ substrRight <- function(x, n){
 #Load STRUCTURE output file
 geneticsdata <- read.delim("Data/pike/genetics/struct_K4_1_f_clean.txt", sep = "", dec = ".", header = F, stringsAsFactors = F)
 
+#Check locations for genotypes
+Pike1 <- fread("Data/pike/1Pike_Latest_Version.txt") 
+
 #Load phenotype data
 Otodata <- fread("Data/pike/growth/Pikedata_model.csv")
 
@@ -1952,6 +1963,21 @@ Data <- geneticsdata%>%
             cluster4=as.numeric(V9))%>%
   drop_na()
 
+#Check locations for genotypes
+Pike1 <- fread("Data/pike/1Pike_Latest_Version.txt")
+Pike2 <- Pike1%>%
+  transmute(ID = Fish_ID,
+            waterbody = Waterbody,
+            Lat = Capture_Latitude,
+            Long = Capture_Longitude)
+
+Genloc <- Data%>%
+  inner_join(Pike2, by = "ID")
+
+table(Genloc$waterbody)
+fwrite(Genloc, "GIS/Genetics_locations.csv")
+
+#Form phenotype dataframe for joining
 Otoclusters <- Otodata%>%
   transmute(ID=ID,
             DTW_cluster=cluster,
@@ -2040,6 +2066,8 @@ Pike2 <- Pike1%>%
                          Fish_ID=="BH-51614"&Waterbody=="BAT"~"NA",
                          Fish_ID=="BH-90307"&MarkorRecap=="Mark"~"NA",
                          TRUE~Fish_ID),
+            name=Pike_Name,
+            capt = Sampler,
             capt_date=Date,
             TL_mm = Total_Length_mm,
             Weight=Weight,
@@ -2146,6 +2174,23 @@ agedist <- ggplot(pikeages, aes(age, fill = sex))+
 
 ggsave("Figures/supplement/whole-sample-age-sex-distribution.png", agedist, width = 15, height = 10, units = "cm", bg = "white", dpi = 600)
 
+#plot size distribution
+
+sizedist <- ggplot(pikeages, aes(TL_mm, fill = sex))+
+  geom_histogram(binwidth = 50)+
+  scale_x_continuous(breaks = seq(100,1500, 100))+
+  scale_y_continuous(breaks = c(0, 5, 10, 15, 20,25, 30))+
+  labs(x = "total length (mm)",
+       y = "n individuals",
+       fill = "sex (female/male)")+
+  theme_bw()+
+  theme(axis.text = element_text(size = 12, color = "black"),
+        axis.title = element_text(size = 12, color = "black"),
+        legend.text = element_text(size = 12, color = "black"),
+        legend.title = element_text(size = 12, color = "black"))
+
+ggsave("Figures/supplement/whole-sample-size-sex-distribution.png", sizedist, width = 15, height = 10, units = "cm", bg = "white", dpi = 600)
+
 fwrite(pike_inc2, "Data/pike/growth/Oto_increment_data_with_rad.csv")
 ```
 
@@ -2216,6 +2261,35 @@ pikedata <- fread("Data/pike/growth/Growthdata_element_clusters.csv")
 head(pikedata)
 tail(pikedata)
 str(pikedata)
+
+Phenoarea <- pikedata%>%
+  transmute(ID, capt, area, phenotype)%>%
+  distinct()
+
+Captures <- ggplot(Phenoarea, aes(phenotype, fill = capt))+
+  geom_bar(position = "fill")+
+  labs(x = "phenotype",
+       y = "percentage")+
+  scale_fill_manual(values = c("#1B9E77", "#D95F02", "#7570B3", "#E7298A", "#66A61E", "#E6AB02", "#A6761D", "#666666","darkblue","darkred","cyan","red","darkgreen", "orange","blue"))+
+  scale_x_discrete(breaks = c(unique(pikedata$phenotype)),
+                   labels = c("freshwater resident", "brackish resident", "cross-habitat", "anadromous"))+
+    scale_y_continuous(breaks = c(0, 0.25, 0.5, 0.75, 1),
+                       labels = c("0", "25", "50", "75", "100"))+
+  theme_classic()
+
+areas <- ggplot(Phenoarea, aes(phenotype, fill = area))+
+  geom_bar(position = "fill")+
+  labs(x = "phenotype",
+       y = "percentage")+
+  scale_fill_manual(values = c("#1B9E77", "#D95F02", "#7570B3", "#E7298A", "#66A61E", "#E6AB02", "#A6761D", "#666666","darkblue","darkred","cyan","red","darkgreen", "orange","blue"))+
+  scale_x_discrete(breaks = c(unique(pikedata$phenotype)),
+                   labels = c("freshwater resident", "brackish resident", "cross-habitat", "anadromous"))+
+    scale_y_continuous(breaks = c(0, 0.25, 0.5, 0.75, 1),
+                       labels = c("0", "25", "50", "75", "100"))+
+  theme_classic()
+
+ggsave("Figure-phenotypes-per-waterbody.png", Captures, height = 8, width = 16, units = "cm", dpi = 600, bg = "white")
+ggsave("Figure-phenotypes-per-boddenchain.png", areas, height = 8, width = 16, units = "cm", dpi = 600, bg = "white")
 
 #Prepare data frame with factors, scale and center element data
 pikes2 <- pikedata%>%
@@ -2332,6 +2406,11 @@ pikemodel.nogen <- update(pikemodel.1, ~.-lifeyear*genotype)
 
 anova(pikemodel.1, pikemodel.nogen)
 
+#test phenotype effect
+pikemodel.nophen <- update(pikemodel.1, ~.-lifeyear*phenotype)
+
+anova(pikemodel.1, pikemodel.nophen)
+
 #New model with genotype removed
 pikemodel.1.1 <- lmer(log10(inc_um)~res_mean+lifeyear*phenotype+I(lifeyear^2)+Sr_mean+sex+(1|ID),
                     REML = F, data = pikes)
@@ -2442,7 +2521,7 @@ Temp <- ggplot(pikes, aes(res_mean, log(inc_um), color=agefact2))+
   stat_smooth(method = "lm", fill="gray", fullrange = T, lwd=.8)+
   labs(x=expression("scaled"~delta^18*"O"~("z-score")), 
        y=expression("log increment"~(mu*"m")),
-       color="ageclass")+
+       color="age class")+
   scale_y_continuous(limits = c(4, 7.5))+
   scale_color_viridis_d()+
   theme_classic()+
@@ -2482,7 +2561,7 @@ Sal <- ggplot(pikes, aes(Sr_mean, log(inc_um), color=agefact2))+
   stat_smooth(method = "lm", fill="gray", fullrange = T, lwd=.8)+
   labs(x=expression("scaled"~"Sr/Ca"~("z-score")), 
        y=expression("log increment"~(mu*"m")),
-       color="ageclass")+
+       color="age class")+
   scale_y_continuous(limits = c(4, 7.5))+
   scale_color_viridis_d()+
   theme_classic()+
@@ -2576,13 +2655,81 @@ phenogrowth <- ggplot(Newdata2, aes(factor(lifeyear), prediction, fill=phenotype
         axis.ticks = element_line(size = 1, colour = "black"),
         axis.text = element_text(size = 30, colour = "black"),
         axis.text.y = element_text(size = 30, colour = "black"),
-        axis.title.x = element_text(size = 30, colour = "black"),
-        axis.title.y = element_text(size = 30, colour = "black"),
+        axis.title.x = element_text(size = 30, colour = "black", margin = margin(t = 20)),
+        axis.title.y = element_text(size = 30, colour = "black", margin = margin(r = 20)),
         legend.text = element_text(size = 30, colour = "black"),
         legend.title = element_text(size = 30, colour = "black"),
         legend.key.size = unit(2.5,"line"))
 
 ggsave("Figures/MS/Phenotype-effects-growth.png", phenogrowth, width = 16, height = 8, dpi = 600, bg = "white")
+```
+
+```{r figure for genotype effect, eval=TRUE}
+rm(list = ls())
+
+pikes <- fread("Data/pike/growth/Pikedata_model.csv")
+pikes[pikes$genotype == ""]$genotype <- NA
+
+pikes <- pikes%>%
+  drop_na(genotype)
+
+pikemodel.final <- lmer(log10(inc_um)~res_mean+lifeyear*genotype+I(lifeyear^2)+Sr_mean+sex+(1|ID),
+                    REML = F, data = pikes)
+
+mypalette1 <- adjustcolor(c("#004643","#00BFB2","#F1C40F","#C5D86D","#AF3800"), alpha.f = 0.6)
+
+lifeyear <- unique(pikes$lifeyear)
+phenotype <- unique(pikes$phenotype)
+genotype <- unique(pikes$genotype)
+res_mean <- seq(min(pikes$res_mean), max(pikes$res_mean), 0.1)
+Sr_mean <- seq(min(pikes$Sr_mean), max(pikes$res_mean),0.1)
+sex <- unique(pikes$sex)
+ID <- "NA"
+
+Newdata <- expand.grid(lifeyear=lifeyear, phenotype=phenotype, genotype=genotype, res_mean=res_mean, Sr_mean=Sr_mean, sex=sex, ID=ID)
+head(Newdata)
+
+Newdata$prediction <- 10^(predict(pikemodel.final, newdata = Newdata, allow.new.levels=TRUE, type="response"))
+
+Newdata2 <- Newdata%>%
+  mutate(keep=case_when(genotype == "1" &lifeyear <= max(pikes[pikes$genotype=="1",]$lifeyear)~1,
+                   genotype=="2"&lifeyear<=max(pikes[pikes$genotype=="2",]$lifeyear)~1,
+                   genotype=="3"&lifeyear<=max(pikes[pikes$genotype=="3",]$lifeyear)~1,
+                   genotype=="4"&lifeyear<=max(pikes[pikes$genotype=="4",]$lifeyear)~1,
+                   genotype=="U"&lifeyear<=max(pikes[pikes$genotype=="U",]$lifeyear)~1,
+                   TRUE~0))%>%
+           filter(keep==1)
+
+Newdata2$genotype <- fct_relevel(Newdata2$genotype, "2", "1", "3", "4", "U")
+
+# Create ggplot with boxplots and custom position dodge 
+
+Genogrowth <- ggplot(Newdata2, aes(factor(lifeyear), prediction, fill=genotype), alpha=0.6)+
+  geom_boxplot(lwd=.5, outlier.shape = NA, width=.6, position = position_dodge(width = NULL), color="black")+
+  labs(x="Age (years)", y=expression("increment"~(mu*"m")),
+       fill="genotype")+
+  scale_x_discrete(limits=factor(c(1:11)),
+                   breaks=c("1","2","3","4","5","6","7","8","9","10","11"))+
+  scale_fill_manual(breaks = c("2","1","3","4","U"),
+                    values = c("#C5D86D","#00BFB2","#F1C40F","#004643","#AF3800"),
+                    labels = c("putative freshwater (N = 19)", "putative anadromous (N = 17)",
+                               "putative brackish 1 (N = 13)", "putative brackish 2 (N = 22)", "unassigned (N = 28)"))+
+  theme_classic()+
+  theme(panel.grid.major = element_line(),
+        legend.position = c(.715,.79),
+        legend.background = element_blank(),
+        legend.box.background = element_rect(),
+        axis.line = element_line(size = 1, colour = "black", linetype = 1),
+        axis.ticks = element_line(size = 1, colour = "black"),
+        axis.text = element_text(size = 30, colour = "black"),
+        axis.text.y = element_text(size = 30, colour = "black"),
+        axis.title.x = element_text(size = 30, colour = "black", margin = margin(t = 20)),
+        axis.title.y = element_text(size = 30, colour = "black", margin = margin(r = 20)),
+        legend.text = element_text(size = 30, colour = "black"),
+        legend.title = element_text(size = 30, colour = "black"),
+        legend.key.size = unit(2.5,"line"))
+
+ggsave("Figures/supplement/Genotype-effects-growth.png", Genogrowth, width = 16, height = 8, dpi = 600, bg = "white")
 ```
 
 ## Lifelong growth
@@ -2735,15 +2882,15 @@ pl_theme =	theme_classic() +
         legend.box.background = element_rect(),
         axis.line = element_line(size = .5, colour = "black", linetype = 1),
         axis.ticks = element_line(size = .5, colour = "black"),
-        axis.text.x = element_text(size = 15, colour = "black"),
-        axis.text.y = element_text(size = 15, colour = "black"),
+        axis.text.x = element_text(size = 14, colour = "black"),
+        axis.text.y = element_text(size = 14, colour = "black"),
         axis.title.x = element_blank(),
         axis.title.y = element_blank(),
         legend.text = element_text(size = 5),
         legend.title = element_text(size = 5, face = "bold"),
         legend.key.size = unit(.5,"line"),
         legend.position = c(0.3,0.8),
-        plot.title = element_text(size = 15, colour = "black"))
+        plot.title = element_text(size = 14, colour = "black"))
 
 # x is a stanfit
 phenotype_predict = function(x, quants = c(0.5, 0.05, 0.95), names = c("median", "lower", "upper")) {
@@ -2804,7 +2951,7 @@ phenocurves3 <- annotate_figure(phenocurves2,
                               bottom = text_grob("Age (years)", rot = 0, size = 15), 
                               left = text_grob(expression("otolith radius"~(mu~"m")), rot = 90, size = 15))
 
-ggsave("Figures/MS/Individual_growth_phenotypes-revised_long.png", phenocurves3, width = 15, height = 15, units = "cm", dpi = 600, bg = "white")
+ggsave("Figures/MS/Individual_growth_phenotypes-revised.png", phenocurves3, width = 15, height = 15, units = "cm", dpi = 600, bg = "white")
 ```
 
 ```{r figure VB curves genotype, include=FALSE, eval=FALSE}
@@ -3121,7 +3268,7 @@ pairwise.perm.manova(Genetics_pheno, Otogen_prob2$phenotype, test = c("Wilks"), 
 #All significantly different except for anadromous and freshwater resident pike (p = 0.317)
 
 #Pairwise testing to assess between-location differences in genotype distribution
-pairwise.perm.manova(Genetics_loc, Otogen_prob3$waterbody, test = c("Hotelling-Lawley"), nperm = 999, 
+pairwise.perm.manova(Genetics_loc, Otogen_prob3$waterbody, test = c("Wilks"), nperm = 999, 
   progress = TRUE, p.method = "fdr", F = FALSE, R2 = FALSE)
 #No differences between lagoons, only between tributaries and all lagoons (but WRB vs NRB nearly significant!)
 ```
