@@ -888,7 +888,8 @@ Pikespec <- Pikedata%>%
 fwrite(Pikespec, "Data/Pike/niche/Pike_eco-clean-cbackcalculated_s-metric.csv")
 
 ggplot(Pikespec, aes(phenotype, 1-s_index, color = phenotype))+
-  geom_boxplot()+
+  geom_violin()+
+  geom_boxplot(width = 0.1)+
   theme_classic()
 
 ggplot(Pikespec, aes(genotype, 1-s_index, color = genotype))+
