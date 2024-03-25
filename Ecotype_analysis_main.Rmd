@@ -42,6 +42,7 @@ library(lubridate)
 library(factoextra)
 library(data.table)
 library(gridExtra)
+library(MCMCglmm)
 library(loo)
 library(bayesplot)
 library("rstan")
@@ -774,6 +775,200 @@ for (i in 1:length(IDOto)) {
   dev.off()  
 }
 ```
+
+```{r individual level thermosaline specialization}
+Otos <- fread("Data/pike/elements/Oto_LA-to-d18O_interpolation_Sr-corrected_smooth.csv")
+Otos2 <- Otos%>%
+  transmute(fish_ID, 
+            d18O = d18O + res,
+            Sr = Sr*1000,
+            lifeyear = year)
+
+Phenogeno <- fread("Data/pike/growth/Pikedata_model.csv")
+
+Phenogeno2 <- Phenogeno%>%
+  transmute(fish_ID = ID,
+            waterbody, TL_mm, phenotype, sex, genotype)
+
+Otophenogeno <- Phenogeno2%>%
+  inner_join(Otos2, by = "fish_ID")%>%
+  distinct()
+
+mod1 <- MCMCglmm(cbind(d18O, Sr)~trait-1, random = ~fish_ID, data = Otophenogeno, family = c("gaussian", "gaussian"), rcov = ~us(trait):units,
+                 pr = TRUE, verbose = FALSE, nitt = 100000, burnin = 50000, thin = 50)
+
+summary(mod1)
+
+#Extract between individual component model 1
+BICmat <- mod1$VCV[, "fish_ID"]
+BIC <- mean(BICmat)
+
+#Extract within individual component model
+WICmat <- mod1$VCV[, grep("trait", colnames(mod1$VCV))]
+
+#Convert whole population residual variance into matrix
+OO <- mean(WICmat[,1])
+OSr <- mean(WICmat[,2])
+SrO <- mean(WICmat[,3])
+SrSr <- mean(WICmat[,4])
+
+WICmat <- matrix(0, nrow = 2, ncol = 2)
+
+#fill diagonals with residual variance
+WICmat[1,1] <- OO
+WICmat[2,2] <- SrSr
+WICmat[1,2] <- OSr
+WICmat[2,1] <- SrO
+
+row.names(WICmat) <- c("d18O", "Sr:Ca")
+colnames(WICmat) <- c("d18O", "Sr:Ca")
+
+TNWmat <- BIC + WICmat
+
+mean(eigen(WICmat)$value/eigen(TNWmat)$value)
+
+fwrite(Otophenogeno, "Data/Pike/niche/Pikedata.csv")
+write.table(TNWmat, "Data/Pike/niche/Total-niche-width_matrix.txt")
+write.table(WICmat, "Data/Pike/niche/Within-individual-variance_matrix.txt")
+saveRDS(mod1, "Data/Pike/niche/d18O-Sr-MCMCGLMM.rds")
+```
+
+```{r thermosaline specialization, include=FALSE, eval=FALSE}
+rm(list = ls())
+
+Pikedata <- fread("Data/Pike/niche/Pikedata.csv")
+TNWmat <- fread("Data/Pike/niche/Total-niche-width_matrix.txt")
+WICmat <- fread("Data/Pike/niche/Within-individual-variance_matrix.txt")
+mod1 <- readRDS("Data/Pike/niche/d18O-Sr-MCMCGLMM.rds")
+
+#Individual covariance matrices
+# Initialize an empty list to store covariance matrices from raw data
+num_fish <- length(unique(Pikedata$fish_ID))
+raw_cov_matrices_list <- vector("list", length = num_fish)
+
+# Loop through each fish_ID and calculate the covariance matrices from raw data
+for (i in 1:num_fish) {
+  fish_data <- subset(Pikedata, fish_ID == unique(Pikedata$fish_ID)[i])
+  raw_cov_matrix <- cov(fish_data[, c("d18O", "Sr")], use = "complete.obs")
+  raw_cov_matrices_list[[i]] <- raw_cov_matrix
+}
+
+names(raw_cov_matrices_list) <- unique(Pikedata$fish_ID)
+
+saveRDS(raw_cov_matrices_list, file = "Data/Pike/niche/individual-varcov.RData")
+
+# Function to calculate normalized eigenvalues
+eigenval <- function(fish_matrix, population_matrix) {
+  if (any(is.na(fish_matrix))) {
+    return(NA)
+  }
+  eigenvalues_fish <- eigen(fish_matrix)$values
+  if (any(is.na(eigenvalues_fish))) {
+    return(NA)
+  }
+  #population matrix
+  eigenvalues_population <- eigen(population_matrix)$values
+  normalized_eigenvalues <- eigenvalues_fish / eigenvalues_population
+  return(mean(normalized_eigenvalues))
+}
+
+# Initialize an empty list to store results
+normalized_eigenvalues_list <- numeric(num_fish)
+
+for (i in 1:num_fish) {
+  fish_matrix <- raw_cov_matrices_list[[i]]  # Use the raw data covariance matrix
+  normalized_eigenvalues_list[i] <- eigenval(fish_matrix, TNWmat)
+}
+
+Spec_index <- tibble(fish_ID = unique(Pikedata$fish_ID), s_index = normalized_eigenvalues_list)
+
+Pikespec <- Pikedata%>%
+  left_join(Spec_index, by = "fish_ID")
+
+fwrite(Pikespec, "Data/Pike/niche/Pike_eco-clean-cbackcalculated_s-metric.csv")
+
+ggplot(Pikespec, aes(phenotype, 1-s_index, color = phenotype))+
+  geom_boxplot()+
+  theme_classic()
+
+ggplot(Pikespec, aes(genotype, 1-s_index, color = genotype))+
+  geom_boxplot()+
+  theme_classic()
+```
+
+```{r plot thermosaline core areas, include=FALSE, eval=FALSE}
+rm(list = ls())
+
+Pikedata <- fread("Data/Pike/niche/Pikedata.csv")
+TNWmat <- fread("Data/Pike/niche/Total-niche-width_matrix.txt")
+WICmat <- fread("Data/Pike/niche/Within-individual-variance_matrix.txt")
+mod1 <- readRDS("Data/Pike/niche/d18O-Sr-MCMCGLMM.rds")
+Individuals <- readRDS("Data/Pike/niche/individual-varcov.RData")
+
+BICmat <- TNWmat - WICmat
+
+means <- Pikedata%>%reframe(d18O = mean(d18O, na.rm = T), Sr = mean(Sr, na.rm = T))
+means <- as.matrix(means)
+
+TNW_ellipse <- data.frame(ellipse::ellipse(TNWmat, level = 0.4, npoints = 100, centre = c(means[1], means[2])))
+
+WIC_ellipse <- data.frame(ellipse::ellipse(WICmat, level = 0.4, npoints = 100, centre = c(means[1], means[2])))
+
+
+BIC_ellipse <- data.frame(d18O = means[1], Sr = means[2], varO = 1.276, varSr = 1.276)
+
+
+pl_theme <- theme(legend.position = "left",
+                  axis.text = element_text(size = 10, color = "black"))
+
+ggplot()+
+  geom_point(data = Pikedata, aes(x = d18O, y = Sr, colour = phenotype), size = 0.5)+
+  stat_ellipse(data = Pikedata, aes(x = d18O, y = Sr, group = phenotype, fill = phenotype), level = 0.4,
+               alpha = 0.3, geom = "polygon", color = "darkgrey", linewidth = 0.2)+
+  stat_ellipse(data = TNW_ellipse, aes(x = d18O, y = Sr.Ca, color = "TNW"), level = 0.4, linewidth = 1.5)+
+  stat_ellipse(data = WIC_ellipse, aes(x = d18O, y = Sr.Ca, color = "WIC"), level = 0.4, linewidth = 1.5)+
+  geom_ellipse(data = BIC_ellipse, aes(x0 = d18O, y0 = Sr, a = 0.4*varO, b = 0.4*varSr, angle = d18O/Sr, color = "BIC"), linewidth = 1)+
+  labs(x = expression(delta^18~"O"~("\u2030 VPDB")),
+       y = expression("Sr:Ca"),
+       color = "niche component",
+       fill = "behavioral phenotype")+
+  scale_color_manual(values = c("TNW" = "black", "WIC" = "orange", "BIC" = "red", "FW_resident" = "#C5D86D",
+                                "BW-resident" = "#004643", "Anadromous" = "#00BFB2", "Trans-habitat" = "#F1C40F"),
+                     breaks = c("TNW", "WIC", "BIC"),
+                     labels = c(expression("TNW"["Pop"]), expression("WIC"["Pop"]), expression("BIC"["Pop"])))+
+  scale_fill_manual(breaks = c("FW_resident", "Anadromous", "Trans-habitat", "BW-resident"),
+                    values = c("#C5D86D", "#00BFB2", "#F1C40F", "#004643"),
+                    labels = c("freshwater (N = 17)", "anadromous (N = 10)", "cross-habitat (N = 21)", "brackish (N = 33)"))+
+  theme_bw()+
+  pl_theme
+
+ggplot()+
+  geom_point(data = Pikedata[Pikedata$genotype != ""&Pikedata$genotype != "U",], aes(x = d18O, y = Sr, colour = genotype), size = 0.5)+
+  stat_ellipse(data = Pikedata[Pikedata$genotype != ""&Pikedata$genotype != "U",], aes(x = d18O, y = Sr, group = genotype, fill = genotype), 
+               level = 0.4,
+               alpha = 0.3, geom = "polygon", color = "darkgrey", linewidth = 0.2)+
+  stat_ellipse(data = TNW_ellipse, aes(x = d18O, y = Sr.Ca, color = "TNW"), level = 0.4, linewidth = 1.5)+
+  stat_ellipse(data = WIC_ellipse, aes(x = d18O, y = Sr.Ca, color = "WIC"), level = 0.4, linewidth = 1.5)+
+  geom_ellipse(data = BIC_ellipse, aes(x0 = d18O, y0 = Sr, a = 0.4*varO, b = 0.4*varSr, angle = d18O/Sr, color = "BIC"), linewidth = 1)+
+  labs(x = expression(delta^18~"O"~("\u2030 VPDB")),
+       y = expression("Sr:Ca"),
+       color = "niche component",
+       fill = "behavioral phenotype")+
+  scale_color_manual(values = c("TNW" = "black", "WIC" = "orange", "BIC" = "red", "2" = "#C5D86D",
+                                "3" = "#004643", "1" = "#00BFB2", "4" = "#F1C40F"),
+                     breaks = c("TNW", "WIC", "BIC"),
+                     labels = c(expression("TNW"["Pop"]), expression("WIC"["Pop"]), expression("BIC"["Pop"])))+
+  scale_fill_manual(breaks = c("2", "1", "3", "4"),
+                    values = c("#C5D86D", "#00BFB2", "#F1C40F", "#004643"),
+                    labels = c("freshwater", "anadromous", "brackish1", "brackish2"))+
+  theme_bw()+
+  pl_theme
+
+ggsave("Figures/Overlap_individuals.png", combined, width = 15, height = 15, units = "cm", dpi = 600, bg = "white")
+```
+
+
+
 
 ## DTW-clustering of otolith timeseries
 ```{r subset data, include=FALSE, eval=FALSE}
