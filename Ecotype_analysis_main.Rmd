@@ -606,17 +606,14 @@ fwrite(oto.int2, "Data/pike/elements/Oto_LA-to-d18O_interpolation_Sr-corrected_s
 rm(list = ls())
 Otos <- fread("Data/Otolith_Inventure_List_2023_06_17.csv")
 
-Otos2 <- Otos%>%
-  transmute(ID = Fish_ID)%>%
-  inner_join(Pike1)
 #read in raw data
 LA <- fread("Data/pike/elements/Pike-LA-ICPMS-years_whole-sample_with-TL.txt")
 d18O <- fread("Data/pike/elements/Pike-d18O-years_whole-sample_with-TL.txt")
 
 #Check how many SIMS points per year ring
-yearlength <- d18O%>%
+yearlength <- LA%>%
   group_by(fishID)%>%
-  filter(lifeyear < 3)%>%
+  filter(lifeyear < 2)%>%
   group_by(fishID, lifeyear)%>%
   transmute(yearlength = length(lifeyear))
 
@@ -1969,7 +1966,8 @@ Pike2 <- Pike1%>%
   transmute(ID = Fish_ID,
             waterbody = Waterbody,
             Lat = Capture_Latitude,
-            Long = Capture_Longitude)
+            Long = Capture_Longitude,
+            Sample_Origin)
 
 Genloc <- Data%>%
   inner_join(Pike2, by = "ID")
@@ -2865,6 +2863,71 @@ colnames(tab) = c("Parameter", "Posterior median", "90% CI")
 knitr::kable(tab)
 ```
 
+```{r run ecotype model and save output, include=FALSE, eval=FALSE}
+rm(list = ls())
+
+source("Data/pike/growth/funcs.r")
+growthdata <- fread("Data/Pike/growth/Pikedata_Stan.csv")
+
+growthdata2 <- growthdata%>%
+  mutate(ecotype_char = case_when(phenotype_char == "FW-resident" ~ "Freshwater",
+                                  phenotype_char == "Anadromous" ~ "Freshwater",
+                                  phenotype_char == "Trans-habitat" ~ "Cross-habitat",
+                                  phenotype_char == "BW-resident" ~ "Brackish"),
+         ecotype_num = case_when(phenotype_char == "FW-resident" ~ 1,
+                                  phenotype_char == "Anadromous" ~ 1,
+                                  phenotype_char == "Trans-habitat" ~ 2,
+                                  phenotype_char == "BW-resident" ~ 3))
+
+fwrite(growthdata2, "Data/Pike/growth/Pikedata_Stan_eco.csv")
+
+#Remove NA
+growthdata <- growthdata2%>%
+  drop_na(ecotype_num)%>%
+  mutate(ID2 = as.numeric(factor(ID)))
+
+standata_growth = list(
+	Radmm = growthdata2$rad_mm, 
+	Agei = growthdata2$lifeyear,
+	N = nrow(growthdata2),
+	n_fish = as.integer(length(unique(growthdata2$ID2))),
+	n_eco = as.integer(max(growthdata2$ecotype_num, na.rm = T)),
+	fish_id = as.integer(growthdata2$ID2))
+fishtable = unique(growthdata2[, c("ID2", "ecotype_num")])
+fishtable = fishtable[order(fishtable$ID2), ]
+standata_growth$eco_id_fish = fishtable$ecotype_num
+
+stancode_i = ("Data/pike/growth/gm_gamma_inv_ecotype.stan")
+mod_i = stan_model(stancode_i, model_name = "Individual pike growth")
+
+fit_gamma_i = sampling(mod_i, iter = 10000, data = standata_growth, init = init_fun,
+					 control = list(adapt_delta = 0.99, max_treedepth = 20), chains = 4, thin = 5)
+
+saveRDS(fit_gamma_i, "Data/pike/growth/fit_gamma_i_ecotype.rds")
+
+p = c("LInf", "tZero", "k", "LInf_eco", "tZero_eco", "k_eco")
+samps_a = as.array(fit_gamma_i, pars = p)
+
+png("Figures/supplement/trace_eco.png", w = 1500, h = 1500)
+	bayesplot::mcmc_trace(samps_a)
+dev.off()
+png("Figures/supplement/intervals_eco.png", w = 1500, h = 1500)
+	bayesplot::mcmc_intervals(samps_a)
+dev.off()
+
+
+samps = as.matrix(fit_gamma_i, pars = p)
+dat = data.frame(
+	estimate = apply(samps, 2, median),
+	lower = apply(samps, 2, quantile, 0.05),
+	upper = apply(samps, 2, quantile, 0.95)
+)
+tab = cbind(rownames(dat), as.character(signif(dat$estimate, 3)), 
+			paste0("(", signif(dat$lower, 3), ", ", signif(dat$upper, 3), ")"))
+colnames(tab) = c("Parameter", "Posterior median", "90% CI")
+knitr::kable(tab)
+```
+
 ```{r figure VB curves phenotype, include=FALSE, eval=FALSE}
 rm(list = ls())
 
@@ -2992,7 +3055,7 @@ genotype_predict = function(x, quants = c(0.5, 0.05, 0.95), names = c("median", 
 	pars_geno = c("LInf_geno", "k_geno", "tZero_geno")
 	samps = as.matrix(x, pars = pars_geno)
 
-	# list of 4 genotypes
+	# list of 5 genotypes
 	# each element is a matrix, 20000 rows (samples) by 15 age increments
 	geno_pr = lapply(0:4, \(i) t(apply(samps[, c(1, 6, 11) + i], 1, Incpredict, Agei = 1:15)))
 
@@ -3049,6 +3112,95 @@ genocurves3 <- annotate_figure(genocurves2,
 
 ggsave("Figures/supplement/Individual_growth_genotypes_revised.png", genocurves3, 
        width = 15, height = 15, units = "cm", dpi = 600, bg = "white")
+```
+
+```{r figure VB curves ecotype, include=FALSE, eval=FALSE}
+rm(list = ls())
+
+# Ectype codes: 1 = "Brackish resident"; 2 = "Freshwater resident"; 3 = "Anadromous"; 4 = "Cross-habitat"
+fit_gamma_i <- readRDS("Data/pike/growth/fit_gamma_i_ecotype.rds")
+growthdata <- fread("Data/Pike/growth/Pikedata_Stan_eco.csv")
+
+mypallette <- c("#C5D86D","#00BFB2","#F1C40F","#004643")
+mylabel <- c("freshwater-adapted (N = 48)", "cross-habitat (N = 28)", "brackish-adapted (N = 44)")
+
+Incpredict = function(pars, Agei) pars[1] * (1 - exp(-pars[2] * (Agei - (-pars[3]))))
+
+pl_theme =	theme_classic() +
+  theme(panel.grid.major = element_line(),
+        legend.box.background = element_rect(),
+        axis.line = element_line(size = .5, colour = "black", linetype = 1),
+        axis.ticks = element_line(size = .5, colour = "black"),
+        axis.text.x = element_text(size = 14, colour = "black"),
+        axis.text.y = element_text(size = 14, colour = "black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        legend.text = element_text(size = 5),
+        legend.title = element_text(size = 5, face = "bold"),
+        legend.key.size = unit(.5,"line"),
+        legend.position = c(0.3,0.8),
+        plot.title = element_text(size = 14, colour = "black"))
+
+# x is a stanfit
+ecotype_predict = function(x, quants = c(0.5, 0.05, 0.95), names = c("median", "lower", "upper")) {
+	pars_eco = c("LInf_eco", "k_eco", "tZero_eco")
+	samps = as.matrix(x, pars = pars_eco)
+
+	# list of 4 ecotypes
+	# each element is a matrix, 20000 rows (samples) by 15 age increments
+	eco_pr = lapply(0:2, \(i) t(apply(samps[, c(1, 4, 7) + i], 1, Incpredict, Agei = 1:15)))
+
+	# convert to a data table summarizing by quantiles
+	eco_q = lapply(eco_pr, \(x) {
+		res = data.frame(t(apply(x, 2, quantile, quants)))
+		colnames(res) = names
+		res$Agei = 1:15
+		res
+	})
+	rbindlist(eco_q, idcol = "eco_id")
+}
+
+fish_predict = function(x, fish_lookup) {
+	pars_fish = c("LInf_i", "k_i", "tZero_i")
+	samps_f = as.matrix(x, pars = pars_fish)
+	fish_pr = lapply(0:119, \(i) t(apply(samps_f[, c(1, 121, 241) + i], 1, Incpredict, Agei = 1:15)))
+	fish_m = lapply(fish_pr, \(x) data.frame(fit = apply(x, 2, median), Agei = 1:15))
+	fish_plot = rbindlist(fish_m, idcol = "fish_id")	
+	fish_plot$eco_id = fish_lookup$ecotype_num[match(fish_plot$fish_id, fish_lookup$ID2)]
+	fish_plot
+}
+
+ecotype_curves = function(x, dat) {
+	fish_lookup = unique(dat[, c("ID2", "ecotype_num")])
+	fish_lookup = fish_lookup[order(fish_lookup$ID2),]
+	eco_plot = ecotype_predict(x)
+	fish_plot = fish_predict(x, fish_lookup)
+	
+pl_curves = list()
+	for(i in 1:3) {
+		pl_curves[[i]] = ggplot(data = eco_plot[eco_id == i]) + 
+			geom_line(data = fish_plot[eco_id == i], aes(x = Agei, y = fit, group = fish_id), color = "grey", size = 0.5, alpha = 0.3) + 
+			geom_ribbon(aes(x = Agei, ymin = lower, ymax = upper), fill = mypallette[i], alpha = 0.5) + 
+			geom_line(aes(x = Agei, y = median), color = mypallette[i], linewidth = 2) + 
+		  ggtitle(mylabel[i])+
+			geom_point(data = dat[dat$ecotype_num == i, ], 
+					   aes(x = lifeyear, y = rad_mm, group = ID), size = 1, alpha = .9, color="black") + 
+		  ylim(0,3.8)+scale_x_continuous(breaks = seq(1,15,1), labels = c("1","","3","","5","","7","","9","","11","","13","","15"))+
+			pl_theme + labs(x="Age", y="otolith radius (um)")
+	}
+	pl_curves$nrow = 2
+	do.call(grid.arrange, pl_curves)
+}
+
+ecocurves <- ecotype_curves(fit_gamma_i, growthdata)
+
+ecocurves2 <- ggarrange(ecocurves)
+
+ecocurves3 <- annotate_figure(ecocurves2, 
+                              bottom = text_grob("Age (years)", rot = 0, size = 15), 
+                              left = text_grob(expression("otolith radius"~(mu~"m")), rot = 90, size = 15))
+
+ggsave("Figures/supplement/Individual_growth_ecotypes-revised.png", ecocurves3, width = 15, height = 15, units = "cm", dpi = 600, bg = "white")
 ```
 
 ```{r growth curve evaluation phenotype, include=FALSE, eval=FALSE}
