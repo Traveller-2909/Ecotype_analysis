@@ -4,9 +4,9 @@ author: "TR"
 date: "`r Sys.Date()`"
 output: html_document
 ---
-**This R markdown file contains all relevant analysis steps of the manuscript titled "Ecotype diversification as mechanism for coexistence in extreme environments – the case of northern pike (Esox lucius) in brackish lagoons", including data preparation of elemental transect data, genetics data and growth data (growth data was produced via OtoJ macro of imageJ´s objectJ plugin). Not included are the assignment of element transect data to individual years, raw data preparation of SIMS and LA-ICPMS analysis and plotting of individual-level transects for evaluation of data quality, outliers or vaterite inclusions (indicated by suspicious values of Sr:Ca & Mg:Ca)**
+**This R markdown file contains all relevant analysis steps of the manuscript titled "Variable habitat use supports fine-scale population differentiation of a freshwater piscivore (northern pike, Esox lucius) along salinity gradients in brackish lagoons", including data preparation of elemental transect data, genetics data and growth data (growth data was produced via OtoJ macro of imageJ´s objectJ plugin). Not included are the assignment of element transect data to individual years, raw data preparation of SIMS and LA-ICPMS analysis and plotting of individual-level transects for evaluation of data quality, outliers or vaterite inclusions (indicated by suspicious values of Sr:Ca & Mg:Ca)**
 
-**All chunks except for the packages chunk have been set to eval = FALSE, chunks can be run individually by setting eval = TRUE**
+**All chunks except for the packages chunk have been set to eval = FALSE, so each code chunk can be run individually without having to run the whole script. Note that some chunks do require a file that may be the output of a preceeding code chunk, in which case this chunk has tpo be run first**
 
 **Note that this file has not been optimized for any kind of output, if you wish to produce an html or word document, you may need to adapt figure and table outputs manually**
 
@@ -19,6 +19,11 @@ library(tidyverse)
 library(ggplot2)
 library(cowplot)
 library(ggridges)
+library(rgdal)
+library(raster)
+library(ipdw)
+library(spatstat)
+library(sf)
 library(lme4)
 library(nlme)
 library(lmerTest)
@@ -177,23 +182,6 @@ Saldata <- Lagoons%>%
 #correct typo in sampling point
 Saldata[Saldata$identifier=="2022"&Saldata$waterbody=="SB",]$Long <- 13.15835
 
-#load in receiver for later checking accessibility of rasterstack
-# Rec <- read.csv2("Data/Rec-Arrays_ALL.csv", header = T, 
-#                  stringsAsFactors = F, sep = ",")
-# Rec$Longitude <- as.numeric(Rec$Longitude)
-# Rec$Latitude <- as.numeric(Rec$Latitude)
-# rec_xy <- Rec[,1:2]
-# rec_sp <- SpatialPointsDataFrame(coords = rec_xy, data = Rec, 
-#                                         proj4string = CRS("+init=epsg:4326"))
-# rec_sp <- spTransform(rec_sp, CRS("+proj=utm +zone=33 +ellps=GRS80 
-#                                   +units=m +no_defs"))
-
-library(rgdal)
-library(raster)
-library(ipdw)
-library(spatstat)
-library(sf)
-
 #load in land layer geopackage
 Land <- readOGR("Data/environment/Studyarea_buffered2.gpkg")
   
@@ -201,7 +189,7 @@ Land <- readOGR("Data/environment/Studyarea_buffered2.gpkg")
 Land <- spTransform(Land, CRS("+proj=utm +zone=33 +ellps=GRS80 +units=m +no_defs"))
 
 #Prepare ipdw loop, one identifier per month for each year 2005 - 2022
-monthID <- unique(Saldata$identifier)[1]
+monthID <- unique(Saldata$identifier)
 
 #empty stacks to fill with interpolated rasters
 raster <- stack()
@@ -219,11 +207,11 @@ for (i in 1:length(monthID)) {
     
     #convert to spatial points
     pnts <- SpatialPointsDataFrame(coords = xy, data = df,
-                                   proj4string = CRS("+init=epsg:4326"))
+                                   proj4string = CRS("EPSG:4326"))
     pnts <- spTransform(pnts, CRS("+proj=utm +zone=33 +ellps=GRS80 +units=m +no_defs"))
     
     #generate costraster, resolution in m
-    costras <- costrasterGen(pnts, Land, extent = "pnts", 
+    costras <- costrasterGen(pnts, Land, extent = "polys", 
                              resolution = 250,
                              projstr = projection(pnts))
     
@@ -265,8 +253,17 @@ for (i in 1:length(monthID)) {
       }
     }
     
-    training <- st_as_sf(training, coords = c("x.utm", "y.utm"))
+    validate <- fulldataset.over[!(row.names(fulldataset.over)%in%
+                                 row.names(training)),]
+    xyu <- cbind(training$x.utm, training$y.utm)
+    training <- SpatialPointsDataFrame(xyu, training)
+    xyu <- cbind(validate$x.utm, validate$y.utm)
+    validate <- SpatialPointsDataFrame(xyu, validate)
+    projection(training) <- projection(pnts)
+    projection(validate) <- projection(pnts)
+    training <- st_as_sf(training)
     
+    #ipdw calculations require projected data, make sure projections match
     paramlist <- c("SAL")
     
     #perform ipdw, set name to month & year
@@ -292,93 +289,38 @@ plot(Land)
 points(pnts)
 plot(costras)
 points(pnts)
-plot(raster$X2019.Month.1.1.1)
+plot(raster$X2020.Month.1)
 
-plot(sras2$Spring_2021)
-points(pnts)
-
- #example for simple error comparison between prediction & measured
-valid <- lm(validation[[2]]$SAL ~ validation[[2]]$predicted)
-
+#error comparison between prediction & measured
+valid <- lm(validation[[2]]$validation.data ~ validation[[2]]$predicted)
 summary(valid)
-
-plot(validation[[2]]$SAL, validation[[2]]$predicted)
 
 errorGen(ipdw, measured.spdf, measured.spdf@data$SAL,
   plot = TRUE, title = "IPDW")
 
-#This extracts salinity values from around the receivers and forms a mean
-
-raster::extract(yras, rec_sp, buffer = 500, small = T, fun = mean, na.rm = T)
-
-salras <- tras
-
-#save to RData
-save(sras, file = "Data/Spatial/Output/Translocation_salinity_2021_lowrange.RData")
-save(tras, file = "Data/Spatial/Output/Temp-IPDW-mean-2007-2022_monthly.RData")
-save(raster, file = "Data/Spatial/Output/Turb-IPDW-mean-2007-2022_monthly.RData")
-
-#monthly salinity
-load("Data/Spatial/Output/Salinity-IPDW-all_07-22.RData")
-#monthly temperature
-load("Data/Spatial/Output/Temp-IPDW-mean-2007-2022_monthly.RData")
-#monthly turbidity
-load("Data/Spatial/Output/Turb-IPDW-mean-2007-2022_monthly.RData")
-
-mean_sal <- calc(raster, fun = mean)
+#calculate mean, SD, max and range
+mean <- calc(raster, fun = mean)
 ssd <- calc(raster, fun = sd)
-srange <- calc(sras, fun = range)
-smax <- calc(sras, fun = max)
+range <- calc(raster, fun = range)
+max <- calc(raster, fun = max)
 
-srange_upper <- srange$layer.2
+#mean range
+range_absolute <- range$layer.2-range$layer.1
 
-plot(tras$X2022.Month.10)
-plot(ssd)
-plot(srange_absolute)
-plot(smax)
-
-#yearly temperature
-tmean <- calc(tras, fun = mean)
-trange <- calc(tras, fun = range)
-sdRast <- calc(tras, fun = sd)
-
-trange_absolute <- trange$layer.2-trange$layer.1
-
-plot(raster)
-
-#Write salinity rasters
-writeRaster(mean_sal, "Data/Spatial/Output/Salinity_raster_book_revised", format="GTiff", overwrite=T)
-writeRaster(ssd, "Data/Spatial/Output/Salinity_SD_book_revised", format="GTiff", overwrite=T)
-writeRaster(srange_upper,"Data/Spatial/Output/Sal-ipdw_range_07-22", format="GTiff", overwrite=T)
-writeRaster(smax,"Data/Spatial/Output/Sal-ipdw_max_07-22", format="GTiff", overwrite=T)
-
-#Write Felirasters
-writeRaster(sras$Spring_2021, "Data/Spatial/Output/Translocation_salinity_2021_lowrange", format="raster",
-            overwrite=T)
-writeRaster(sras2$Spring_2021, "Data/Spatial/Output/Translocation_salinity_2021_highrange", format="raster",
-            overwrite=T)
-
-
-
-#Write temperature rasters
-writeRaster(srange_absolute, "Data/Spatial/Output/Sal-ipdw_range_07-22", format="GTiff")
-writeRaster(ssd, "Data/Spatial/Output/Sal-ipdw_sd_07-22", format="GTiff", overwrite=T)
-writeRaster(smean, "Data/Spatial/Output/Sal-ipdw_mean_07-22", format="GTiff", overwrite=T)
-
-
-#Write measuring station shapefile
-rgdal::writeOGR(pnts, dsn = "Data/Spatial/Output", layer = "coords", driver = "ESRI Shapefile")
-plot(pnts)
+#Write spatial rasters for QGIS or similar, change "Salinity_..." for env. variable that was interpolated
+writeRaster(raster, "Data/Spatial/Environment/Salinity_raster_05-22", format="GTiff", overwrite=T)
 ```
+
 # Life history phenotypes
 ## Data cleanup for niche analysis
+
 ```{r marry d18O data to Sr:Ca data, include=FALSE, eval=FALSE}
 #Script to align Sr:Ca values (5.5 um step size) with d18O values (35 um step size) in a common data frame
 rm(list = ls())
 
 #Read in LA-ICPMS and SIMS data
-LA <- fread("Data/pike/elements/Pike-LA-ICPMS-years_whole-sample_with-TL.txt")
-d18O <- fread("Data/pike/elements/Pike-d18O-years_whole-sample_with-TL.txt")
+LA <- fread("Data/Pike/Elements/Pike-LA-ICPMS-years_whole-sample_with-TL.txt")
+d18O <- fread("Data/Pike/Elements/Pike-d18O-years_whole-sample_with-TL.txt")
 
 #Clean up data & assign capture locations to larger study areas
 #Clean up Trace element data
@@ -491,7 +433,7 @@ for (i in 1:length(IDOto)) {
 
 oto.int <- cbind(d18O_clean, dfE)
 
-fwrite(oto.int, file = "Data/pike/elements/Oto_LA-to-d18O_interpolation.csv")
+fwrite(oto.int, file = "Data/Pike/Elements/Oto_LA-to-d18O_interpolation.csv")
 ```
 
 ```{r covariance analysis d18O vs Sr and data correction, include=FALSE, eval=FALSE}
@@ -499,7 +441,7 @@ fwrite(oto.int, file = "Data/pike/elements/Oto_LA-to-d18O_interpolation.csv")
 rm(list = ls())
 
 #read in combined element transect data
-oto.int <- fread("Data/pike/elements/Oto_LA-to-d18O_interpolation.csv")
+oto.int <- fread("Data/Pike/Elements/Oto_LA-to-d18O_interpolation.csv")
 
 #clean up to remove fish from control lake (but make subset for later join)
 oto.int2 <- oto.int%>%
@@ -509,7 +451,7 @@ oto.int2 <- oto.int%>%
 subset_KD <- subset(oto.int, capt=="KD")
 
 #plot correlation between d18O and Sr
-Correlation.Sr <- ggplot(oto.int2,aes(x=Sr*1000, y=d18O))+
+ggplot(oto.int2,aes(x=Sr*1000, y=d18O))+
   geom_point(size=.5)+
   scale_x_continuous(breaks = seq(0,8,1))+
   scale_y_continuous(breaks = seq(-15,0,1))+
@@ -527,8 +469,6 @@ Correlation.Sr <- ggplot(oto.int2,aes(x=Sr*1000, y=d18O))+
           legend.text = element_text(size = 5),
           legend.title = element_text(size = 10, face = "bold"),
           plot.title = element_text(size = 15, face = "bold", hjust = .5))
-
-ggsave("Figures/supplement/Correlation_d18O~Sr.png", Correlation.Sr, width = 15, height = 9, units = "cm", dpi = 600, bg="white")
 
 #Test different models
 #linear model
@@ -558,7 +498,7 @@ plot(oto.int3[oto.int3$fish_ID=="BH-01906",]$sims_dist, oto.int3[oto.int3$fish_I
 plot(oto.int3[oto.int3$fish_ID=="BH-01906",]$sims_dist, oto.int3[oto.int3$fish_ID=="BH-01906",]$res, type="l",
      xlab = "Distance from core (um)", ylab = "d18O residual")
 
-fwrite(oto.int3, "Data/pike/elements/Oto_LA-to-d18O_interpolation_Sr-corrected.csv")
+fwrite(oto.int3, "Data/Pike/Elements/Oto_LA-to-d18O_interpolation_Sr-corrected.csv")
 ```
 
 ```{r average corrected d18O over years, include=FALSE, eval=FALSE}
@@ -566,7 +506,7 @@ fwrite(oto.int3, "Data/pike/elements/Oto_LA-to-d18O_interpolation_Sr-corrected.c
 rm(list = ls())
 
 #read in data
-oto.int <- fread("Data/pike/elements/Oto_LA-to-d18O_interpolation_Sr-corrected.csv")
+oto.int <- fread("Data/Pike/Elements/Oto_LA-to-d18O_interpolation_Sr-corrected.csv")
 
 #Make lifeyear a factor
 oto.int$lifeyear <- as.factor(oto.int$lifeyear)
@@ -597,18 +537,17 @@ plot(oto.int[oto.int$fish_ID=="BH-01855",]$sims_dist, oto.int[oto.int$fish_ID=="
 plot(oto.int2[oto.int2$fish_ID=="BH-01855",]$dist, oto.int2[oto.int2$fish_ID=="BH-01855",]$d18O, type="l")
 
 #Save data
-fwrite(oto.int2, "Data/pike/elements/Oto_LA-to-d18O_interpolation_Sr-corrected_smooth.csv")
+fwrite(oto.int2, "Data/Pike/Elements/Oto_LA-to-d18O_interpolation_Sr-corrected_smooth.csv")
 ```
 
 ## Lifelong niche (individual and population level)
 ```{r calculate profile plots for individuals, include=FALSE, eval=FALSE}
 #Script to calculate individual-level life history plots for individual visual assessment of thermosaline history
 rm(list = ls())
-Otos <- fread("Data/Otolith_Inventure_List_2023_06_17.csv")
 
 #read in raw data
-LA <- fread("Data/pike/elements/Pike-LA-ICPMS-years_whole-sample_with-TL.txt")
-d18O <- fread("Data/pike/elements/Pike-d18O-years_whole-sample_with-TL.txt")
+LA <- fread("Data/Pike/Elements/Pike-LA-ICPMS-years_whole-sample_with-TL.txt")
+d18O <- fread("Data/Pike/Elements/Pike-d18O-years_whole-sample_with-TL.txt")
 
 #Check how many SIMS points per year ring
 yearlength <- LA%>%
@@ -678,7 +617,7 @@ mypallete <- viridis::viridis(4, direction = 1)
 IDOto <- unique(d18O$ID)
 
 for (i in 1:length(IDOto)) {
-  png(paste0("Figures/supplement/individual plots/", IDOto[i], ".png"), width = 1200)
+  png(paste0("Figures/Supplement/Individual plots/", IDOto[i], ".png"), width = 1200)
   par(mfrow=c(1,2))
   plot(LA[which(LA$ID == IDOto[i]), "LA_dist",], 
        LA[which(LA$ID == IDOto[i]), "Sr",], main = "", 
@@ -777,7 +716,7 @@ for (i in 1:length(IDOto)) {
 #Script to subset data sets into lagoon and freshwater sample
 rm(list = ls())
 #read in data
-oto.int <- fread("Data/pike/elements/Oto_LA-to-d18O_interpolation_Sr-corrected_smooth.csv")
+oto.int <- fread("Data/Pike/Elements/Oto_LA-to-d18O_interpolation_Sr-corrected_smooth.csv")
 
 #remove NAs
 oto.int <- na.omit(oto.int)
@@ -790,8 +729,8 @@ Bgroup <- oto.int%>%filter(area=="WRB"|area=="NRB"|area=="GB")
 length(unique(Bgroup$fish_ID))+length(unique(Fgroup$fish_ID))
 
 #data package
-fwrite(Fgroup, "Data/pike/clustering/Tributary-sample-transects.csv")
-fwrite(Bgroup, "Data/pike/clustering/Lagoon-sample-transects.csv")
+fwrite(Fgroup, "Data/Pike/Clustering/Tributary-sample-transects.csv")
+fwrite(Bgroup, "Data/Pike/Clustering/Lagoon-sample-transects.csv")
 ```
 
 ```{r data prep and DTW clustering, include=FALSE, eval=FALSE}
@@ -799,8 +738,8 @@ fwrite(Bgroup, "Data/pike/clustering/Lagoon-sample-transects.csv")
 rm(list = ls())
 
 #read in data
-Fgroup <- as.data.frame(fread("Data/pike/clustering/Tributary-sample-transects.csv"))
-Bgroup <- as.data.frame(fread("Data/pike/clustering/Lagoon-sample-transects.csv"))
+Fgroup <- as.data.frame(fread("Data/Pike/Clustering/Tributary-sample-transects.csv"))
+Bgroup <- as.data.frame(fread("Data/Pike/Clustering/Lagoon-sample-transects.csv"))
 
 #load funtions
 source("funcs.R")
@@ -894,12 +833,12 @@ FWplot <- plot(clust_F$k_6, type="sc", linetype="solid", cex=2)+
         plot.title = element_text(size = 25, hjust = 0.5))
 
 save(Fgroup,Bgroup,dataB, dataF, Bseries, Fseries, interpol, clust_B, clust_F, Lagoonplot, FWplot,
-     file = "Data/Pike/Adults_hierarchical_clusters.RData")
+     file = "Data/Pike/Clustering/Adults_hierarchical_clusters.RData")
 ```
 
 ```{r cluster assignment to individuals, include=FALSE, eval=FALSE}
 rm(list=ls())
-load("Data/Pike/Adults_hierarchical_clusters.RData")
+load("Data/Pike/Clustering/Adults_hierarchical_clusters.RData")
 
 #assign clusters to fish
 fishassign_B1 <- data.frame(fish_ID=names(Bseries), 
@@ -951,14 +890,14 @@ Groupall_transect <- rbind(Bgroup, Fgroup)
 Groupall <- Groupall_transect%>%
   inner_join(Groupall_clust, by = c("fish_ID"))
 
-fwrite(Groupall, "Data/Pike/clustering/Phenotypes-element-transects-all.csv")
+fwrite(Groupall, "Data/Pike/Clustering/Phenotypes-element-transects-all.csv")
 ```
 
 ```{r table of poportions, include=FALSE, eval=FALSE}
 #Script to calculate simple distribution tables of phenotype number per area for the calculation of proportions
 rm(list = ls())
 
-Groupall <- fread("Data/Pike/clustering/Phenotypes-element-transects-all.csv")
+Groupall <- fread("Data/Pike/Clustering/Phenotypes-element-transects-all.csv")
 
 #Assign behavioral phenotype based on decision framework (see section C and Figures S4-6 in the supplementary material)
 allpike_pheno <- Groupall%>%
@@ -981,14 +920,16 @@ allpike_pheno <- Groupall%>%
 Clust_props_per_area <- table(allpike_pheno$cluster)
 
 Pheno_props_per_area <- table(allpike_pheno$area, allpike_pheno$phenotype)
-write.table(Pheno_props_per_area, "Data/Pike/clustering/Lagoonprobs.csv", sep = ",")
+
+#Write table for proportions
+write.table(Pheno_props_per_area, "Data/Pike/Clustering/Lagoonprobs.csv", sep = ",")
 ```
 
 ```{r plot freshwater clusters, include=FALSE, eval=FALSE}
 #Script to plot fine-grained cluster solution for freshwater sample (supplement)
 rm(list=ls())
 
-Groupall <- fread("Data/Pike/clustering/Phenotypes-element-transects-all.csv")
+Groupall <- fread("Data/Pike/Clustering/Phenotypes-element-transects-all.csv")
 
 # Generate a color ramp between two colors
 mypallette <- c(colorRampPalette(c("#C5D86D", "#00BFB2", "#F1C40F"))(6))
@@ -1315,25 +1256,24 @@ Transects <- ggarrange(A, B, C, D, E, F1, A1, B1, C1, D1, E1, F2, labels = c("A"
 
 Transects2 <- annotate_figure(Transects, bottom = text_grob(expression("Distance from Core"~(mu~"m")), vjust = 1, size = 10))
 
-ggsave("Figures/supplement/FW-clusters-life-history-transects.png", Transects2, dpi = 600, width = 24, height = 12, units = "cm", bg = "white")
+ggsave("Figures/Supplement/FW-clusters-life-history-transects.png", Transects2, dpi = 600, width = 24, height = 12, units = "cm", bg = "white")
 ```
 
 ```{r plot lagoon clusters, include=FALSE, eval=FALSE}
-#Script to plot fine-grained cluster solution for freshwater sample (supplement)
+#Script to plot fine-grained cluster solution for lagoon sample (supplement)
 rm(list=ls())
 
-Groupall <- fread("Data/Pike/clustering/Phenotypes-element-transects-all.csv")
+Groupall <- fread("Data/Pike/Clustering/Phenotypes-element-transects-all.csv")
 
 # Generate a color ramp between two colors
 mypallette <- c(colorRampPalette(c("#004643", "#F1C40F"))(4))
 
 A <- ggplot(Groupall[Groupall$fish_ID=="BH-01906",])+
   geom_line(aes(dist, Sr*1000, group=fish_ID), color="black", linewidth=1, alpha=.8)+
-  geom_point(aes(dist, Sr*1000), color="black", 
-             alpha=1, size=2)+
+  geom_point(aes(dist, Sr*1000), color="black", alpha=1, size=2)+
   theme_classic()+
-  #ylim(0, 8)+
-  #scale_y_continuous(breaks = seq(0,8,1), limits = c(0,8))+
+  ylim(0, 8)+
+  scale_y_continuous(breaks = seq(0,8,1), limits = c(0,8))+
   xlim(0,1800)+
   labs(y=expression("tracer concentration (ppt)"),
        x = expression("time (d)"))+
@@ -1351,10 +1291,10 @@ A <- ggplot(Groupall[Groupall$fish_ID=="BH-01906",])+
   scale_y_continuous(breaks = c(3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5),
                      labels = c("0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7"))+
   scale_x_continuous(breaks = c(0, 250, 500, 750, 1000, 1250, 1500, 1750),
-                     labels = c(0, 50, 100, 150, 200, 250, 300, 350))
-  coord_cartesian(clip = "off")
-  #annotation_custom(grob = text_grob(label = "BW Low saline|shift (N = 20)", size = 7, just = "left"),
-                   # ymin = 9.3, ymax = 9.3, xmin = -50, xmax = -50)+
+                     labels = c(0, 50, 100, 150, 200, 250, 300, 350))+
+  coord_cartesian(clip = "off")+
+  annotation_custom(grob = text_grob(label = "BW Low saline|shift (N = 20)", size = 7, just = "left"),
+                    ymin = 9.3, ymax = 9.3, xmin = -50, xmax = -50)+
   geom_segment(x=450, y=-0.01, xend=450, yend=0.06, 
                lineend = "butt", linejoin = "mitre",
                size=2, arrow = arrow(length = unit(0.18, "inches")),
@@ -1363,8 +1303,6 @@ A <- ggplot(Groupall[Groupall$fish_ID=="BH-01906",])+
                                      rot = 90, size = 7),
                                      ymin=0, ymax=8,
                                      xmin=-460, xmax=-460)
-  
-  ggsave("Figures/MS/Mn-plot2.png", A, width = 15, height = 8, units = "cm", dpi = 600, bg = "white")
 
 A1 <- ggplot(Groupall[Groupall$cluster=="BW Low saline|shift",])+
   geom_line(aes(dist, res, group=fish_ID), color="grey", linewidth=.3, alpha=.8)+
@@ -1555,13 +1493,13 @@ Transects <- ggarrange(A, B, C, D, A1, B1, C1, D1, labels = c("G", "H", "I", "J"
 
 Transects2 <- annotate_figure(Transects, bottom = text_grob(expression("Distance from Core"~(mu~"m")), vjust = 1, size = 7))
 
-ggsave("Figures/supplement/BW-clusters-life-history-transects.png", Transects2, dpi = 600, width = 16, height = 8, units = "cm", bg = "white")
+ggsave("Figures/Supplement/BW-clusters-life-history-transects.png", Transects2, dpi = 600, width = 16, height = 8, units = "cm", bg = "white")
 ```
 
 ```{r plot life history phenotypes, include=FALSE, eval=FALSE}
 #Script to plot life history phenotypes identified by grouping ecologically similar clusters (behavioral phenotypes)
 rm(list=ls())
-Groupall <- fread("Data/Pike/clustering/Phenotypes-element-transects-all.csv")
+Groupall <- fread("Data/Pike/Clustering/Phenotypes-element-transects-all.csv")
 
 mypalette <- adjustcolor(c("#004643","#00BFB2","#F1C40F","#C5D86D","#AF3800"), alpha.f = 0.6)
 
@@ -1599,7 +1537,7 @@ A <- ggplot(allpike_pheno[allpike_pheno$phenotype=="FW-resident",])+
         axis.title.x = element_blank(),
         axis.line = element_line(size = 0.3))+
   coord_cartesian(clip = "off")+
-  annotation_custom(grob = text_grob(label = "freshwater resident", size = 8, just = "left"),
+  annotation_custom(grob = text_grob(label = "Freshwater resident", size = 8, just = "left"),
                     ymin = 9.3, ymax = 9.3, xmin = -50, xmax = -50)+
   annotation_custom(grob = text_grob(label = "(N = 27)", size = 8, just = "left"),
                     ymin = 7.8, ymax = 7.8, xmin = -50, xmax = -50)+
@@ -1607,7 +1545,7 @@ A <- ggplot(allpike_pheno[allpike_pheno$phenotype=="FW-resident",])+
                lineend = "butt", linejoin = "mitre",
                size=2, arrow = arrow(length = unit(0.18, "inches")),
                color="darkorange")+
-  annotation_custom(grob = text_grob(label = "increasing salinity", 
+  annotation_custom(grob = text_grob(label = "Increasing salinity", 
                                      rot = 90, size = 7),
                                      ymin=0, ymax=8,
                                      xmin=-460, xmax=-460)
@@ -1619,7 +1557,7 @@ A1 <- ggplot(allpike_pheno[allpike_pheno$phenotype=="FW-resident",])+
   theme_classic()+
   ylim(-3, 3)+
   xlim(0,2100)+
-  labs(y=expression("scaled"~delta^18*"O"~("VPDB \u2030")))+
+  labs(y=expression("Scaled"~delta^18*"O"~("VPDB \u2030")))+
   theme(legend.position = "none", 
         panel.grid.major.y = element_line(size = .3),
         panel.border = element_rect(fill = NA, size = .3),
@@ -1637,7 +1575,7 @@ A1 <- ggplot(allpike_pheno[allpike_pheno$phenotype=="FW-resident",])+
                lineend = "butt", linejoin = "mitre",
                size=2, arrow = arrow(length = unit(0.18, "inches")),
                color="#FF6666")+
-  annotation_custom(grob = text_grob(label = "warmer", 
+  annotation_custom(grob = text_grob(label = "Warmer", 
                                      rot = 90,, size = 7),
                                      ymin=0, ymax=-3,
                                      xmin=-460, xmax=-460)+
@@ -1645,7 +1583,7 @@ A1 <- ggplot(allpike_pheno[allpike_pheno$phenotype=="FW-resident",])+
                lineend = "butt", linejoin = "mitre",
                size=2, arrow = arrow(length = unit(0.18, "inches")),
                color="#66CCCC")+
-  annotation_custom(grob = text_grob(label = "colder", 
+  annotation_custom(grob = text_grob(label = "Colder", 
                                      rot = 90, size = 7),
                                      ymin=0, ymax=3.2,
                                      xmin=-460, xmax=-460)
@@ -1673,7 +1611,7 @@ B <- ggplot(allpike_pheno[allpike_pheno$phenotype=="BW-resident",])+
         axis.line = element_line(size = 0.3),
         plot.background = element_blank())+
   coord_cartesian(clip = "off")+
-  annotation_custom(grob = text_grob(label = "brackish resident", size = 8, just = "left"),
+  annotation_custom(grob = text_grob(label = "Brackish resident", size = 8, just = "left"),
                     ymin = 9.3, ymax = 9.3, xmin = 100, xmax = 100)+
   annotation_custom(grob = text_grob(label = "(N = 44)", size = 8, just = "left"),
                     ymin = 7.8, ymax = 7.8, xmin = 100, xmax = 100)
@@ -1724,7 +1662,7 @@ C <- ggplot(allpike_pheno[allpike_pheno$phenotype=="Anadromous",])+
         axis.line = element_line(size = 0.3),
         plot.background = element_blank())+
   coord_cartesian(clip = "off")+
-  annotation_custom(grob = text_grob(label = "anadromous", size = 9, just = "left"),
+  annotation_custom(grob = text_grob(label = "Anadromous", size = 9, just = "left"),
                     ymin = 9.3, ymax = 9.3, xmin = 100, xmax = 100)+
   annotation_custom(grob = text_grob(label = "(N = 21)", size = 8, just = "left"),
                     ymin = 7.8, ymax = 7.8, xmin = 100, xmax = 100)
@@ -1775,7 +1713,7 @@ D <- ggplot(allpike_pheno[allpike_pheno$phenotype=="Trans-habitat",])+
         axis.title.x = element_blank(),
         plot.background = element_blank())+
   coord_cartesian(clip = "off")+
-  annotation_custom(grob = text_grob(label = "cross-habitat", size = 9, just = "left"),
+  annotation_custom(grob = text_grob(label = "Cross-habitat", size = 9, just = "left"),
                     ymin = 9.3, ymax = 9.3, xmin = 100, xmax = 100)+
   annotation_custom(grob = text_grob(label = "(N = 28)", size = 8, just = "left"),
                     ymin = 7.8, ymax = 7.8, xmin = 100, xmax = 100)
@@ -1808,7 +1746,7 @@ Transects <- ggarrange(A, C, D, B, A1, C1, D1, B1, labels = c("A", "B", "C", "D"
 
 Transects2 <- annotate_figure(Transects, bottom = text_grob(expression("Distance from Core"~(mu~"m")), vjust = 1, size = 7))
 
-ggsave("Figures/MS/Phenotypes-life-history-transects.png", Transects2, dpi = 600, width = 16, height = 8, units = "cm", bg = "white")
+ggsave("Figures/MS/PDF/Fig2.pdf", Transects2, dpi = 600, width = 16, height = 8, units = "cm", bg = "white")
 ```
 
 ```{r dissimilarity test and jackknife reclassification, include=FALSE, eval=FALSE}
@@ -1816,7 +1754,7 @@ ggsave("Figures/MS/Phenotypes-life-history-transects.png", Transects2, dpi = 600
 rm(list = ls())
 
 #read in data
-Groupall <- fread("Data/Pike/clustering/Phenotypes-element-transects-all.csv")
+Groupall <- fread("Data/Pike/Clustering/Phenotypes-element-transects-all.csv")
 
 dataLagoon <- Groupall%>%
   filter(area%in%c("WRB", "NRB", "GB"))%>%
@@ -1943,13 +1881,13 @@ substrRight <- function(x, n){
 }
 
 #Load STRUCTURE output file
-geneticsdata <- read.delim("Data/pike/genetics/struct_K4_1_f_clean.txt", sep = "", dec = ".", header = F, stringsAsFactors = F)
+geneticsdata <- read.delim("Data/Pike/Genetics/struct_K4_1_f_clean.txt", sep = "", dec = ".", header = F, stringsAsFactors = F)
 
 #Check locations for genotypes
-Pike1 <- fread("Data/pike/1Pike_Latest_Version.txt") 
+Pike1 <- fread("Data/Pike/1Pike_Latest_Version.txt") 
 
 #Load phenotype data
-Otodata <- fread("Data/pike/growth/Pikedata_model.csv")
+Otodata <- fread("Data/Pike/Clustering/Phenotypes-element-transects-all.csv")
 
 #Gentypes: 1=Freshwater; 2=brackish; 3=anadromous
 Data <- geneticsdata%>%
@@ -1977,10 +1915,22 @@ fwrite(Genloc, "GIS/Genetics_locations.csv")
 
 #Form phenotype dataframe for joining
 Otoclusters <- Otodata%>%
-  transmute(ID=ID,
+  transmute(ID=fish_ID,
             DTW_cluster=cluster,
-            phenotype=phenotype,
-            waterbody=waterbody)%>%
+            phenotype=case_when(cluster=="FW low saline|cold"~"FW_resident",
+                            cluster=="FW low saline|shift"~"FW_resident",
+                            cluster=="FW int saline|const"~"FW_resident",
+                            cluster=="FW int saline|shift"~"Anadromous",
+                            cluster=="FW high saline|shift"~"Anadromous",
+                            cluster=="FW high saline|const"~"Trans-habitat",
+                            cluster=="BW Low saline|shift"~"Trans-habitat",
+                            cluster=="BW int saline|cold"~"BW-resident",
+                            cluster=="BW high saline|cold"~"BW-resident",
+                            cluster=="BW high saline|warm"~"BW-resident"),
+            waterbody=case_when(capt%in%c("KB", "SB")~"WRB",
+                                capt%in%c("WB", "BEG", "KJB", "GJB")~"NRB",
+                                capt=="GB"~"GB",
+                                TRUE~"Tributary"))%>%
   distinct()
 
 Otogen <- Data%>%left_join(Otoclusters, by="ID")%>%
@@ -1997,13 +1947,13 @@ df_long2 <- df_long%>%
             ID=ID,
             DTW_cluster=DTW_cluster,
             waterbody=waterbody,
-            cluster=case_when(cluster=="cluster3"~"brackish 1",
-                              cluster=="cluster2"~"freshwater",
-                              cluster=="cluster1"~"anadromous",
-                              cluster=="cluster4"~"brackish 2"),
+            cluster=case_when(cluster=="cluster3"~"Brackish 1",
+                              cluster=="cluster2"~"Freshwater",
+                              cluster=="cluster1"~"Anadromous",
+                              cluster=="cluster4"~"Brackish 2"),
             ass_prob=prob)
 
-fwrite(df_long2, "Data/pike/genetics/Genotype-phenotype-combined.csv")
+fwrite(df_long2, "Data/Pike/Genetics/Genotype-phenotype-combined.csv")
 ```
 
 ```{r hard cluster assignment, include=FALSE, eval=FALSE}
@@ -2015,10 +1965,10 @@ substrRight <- function(x, n){
 }
 
 #Load STRUCTURE output file
-geneticsdata <- read.delim("Data/pike/genetics/struct_K4_1_f_clean.txt", sep = "", dec = ".", header = F, stringsAsFactors = F)
+geneticsdata <- read.delim("Data/Pike/Genetics/struct_K4_1_f_clean.txt", sep = "", dec = ".", header = F, stringsAsFactors = F)
 
 #Load phenotype data
-Otodata <- fread("Data/pike/growth/Pikedata_model.csv")
+Otodata <- fread("Data/Pike/Clustering/Phenotypes-element-transects-all.csv")
 
 #Genotypes: 1=Freshwater; 2=brackish; 3=anadromous
 Data <- geneticsdata%>%
@@ -2030,10 +1980,22 @@ Data <- geneticsdata%>%
   drop_na()
 
 Otoclusters <- Otodata%>%
-  transmute(ID = ID,
-            DTW_cluster = cluster,
-            phenotype = phenotype,
-            waterbody = waterbody)%>%
+  transmute(ID=fish_ID,
+            DTW_cluster=cluster,
+            phenotype=case_when(cluster=="FW low saline|cold"~"FW_resident",
+                            cluster=="FW low saline|shift"~"FW_resident",
+                            cluster=="FW int saline|const"~"FW_resident",
+                            cluster=="FW int saline|shift"~"Anadromous",
+                            cluster=="FW high saline|shift"~"Anadromous",
+                            cluster=="FW high saline|const"~"Trans-habitat",
+                            cluster=="BW Low saline|shift"~"Trans-habitat",
+                            cluster=="BW int saline|cold"~"BW-resident",
+                            cluster=="BW high saline|cold"~"BW-resident",
+                            cluster=="BW high saline|warm"~"BW-resident"),
+            waterbody=case_when(capt%in%c("KB", "SB")~"WRB",
+                                capt%in%c("WB", "BEG", "KJB", "GJB")~"NRB",
+                                capt=="GB"~"GB",
+                                TRUE~"Tributary"))%>%
   distinct()
 
 Otogen <- Data%>%left_join(Otoclusters, by="ID")%>%
@@ -2048,7 +2010,7 @@ Otogen2 <- Otogen%>%
 
 Otogen2$hardclust <- fct_relevel(Otogen2$hardclust, "2", "1", "3", "4", "U")
 
-fwrite(Otogen2, file = "Data/pike/genetics/discrete-cluster-assignment.csv")
+fwrite(Otogen2, file = "Data/Pike/Genetics/discrete-cluster-assignment.csv")
 ```
 
 # Growth analysis of life history phenotypes and genotype
@@ -2058,7 +2020,7 @@ fwrite(Otogen2, file = "Data/pike/genetics/discrete-cluster-assignment.csv")
 rm(list = ls())
 
 #read in pike data
-Pike1 <- fread("Data/pike/1Pike_Latest_Version.txt")
+Pike1 <- fread("Data/Pike/1Pike_Latest_Version.txt")
 Pike2 <- Pike1%>%
   transmute(ID=case_when(Fish_ID=="BH-91050.2"~"BH-91050",
                          Fish_ID=="BH-51614"&Waterbody=="BAT"~"NA",
@@ -2161,16 +2123,16 @@ agedist <- ggplot(pikeages, aes(age, fill = sex))+
   geom_histogram()+
   scale_x_continuous(breaks = seq(1,13,1))+
   scale_y_continuous(breaks = c(0, 5, 10, 15, 20,25, 30))+
-  labs(x = "age (years)",
-       y = "n individuals",
-       fill = "sex (female/male)")+
+  labs(x = "Age (years)",
+       y = "N individuals",
+       fill = "Sex (female/male)")+
   theme_bw()+
   theme(axis.text = element_text(size = 12, color = "black"),
         axis.title = element_text(size = 12, color = "black"),
         legend.text = element_text(size = 12, color = "black"),
         legend.title = element_text(size = 12, color = "black"))
 
-ggsave("Figures/supplement/whole-sample-age-sex-distribution.png", agedist, width = 15, height = 10, units = "cm", bg = "white", dpi = 600)
+ggsave("Figures/Supplement/whole-sample-age-sex-distribution.png", agedist, width = 15, height = 10, units = "cm", bg = "white", dpi = 600)
 
 #plot size distribution
 
@@ -2178,18 +2140,18 @@ sizedist <- ggplot(pikeages, aes(TL_mm, fill = sex))+
   geom_histogram(binwidth = 50)+
   scale_x_continuous(breaks = seq(100,1500, 100))+
   scale_y_continuous(breaks = c(0, 5, 10, 15, 20,25, 30))+
-  labs(x = "total length (mm)",
-       y = "n individuals",
-       fill = "sex (female/male)")+
+  labs(x = "Total length (mm)",
+       y = "N individuals",
+       fill = "Sex (female/male)")+
   theme_bw()+
   theme(axis.text = element_text(size = 12, color = "black"),
         axis.title = element_text(size = 12, color = "black"),
         legend.text = element_text(size = 12, color = "black"),
         legend.title = element_text(size = 12, color = "black"))
 
-ggsave("Figures/supplement/whole-sample-size-sex-distribution.png", sizedist, width = 15, height = 10, units = "cm", bg = "white", dpi = 600)
+ggsave("Figures/Supplement/whole-sample-size-sex-distribution.png", sizedist, width = 15, height = 10, units = "cm", bg = "white", dpi = 600)
 
-fwrite(pike_inc2, "Data/pike/growth/Oto_increment_data_with_rad.csv")
+fwrite(pike_inc2, "Data/Pike/Growth/Oto_increment_data_with_rad.csv")
 ```
 
 ```{r join growth measurements with behavioral phenotypes, include=FALSE, eval=FALSE}
@@ -2197,13 +2159,13 @@ fwrite(pike_inc2, "Data/pike/growth/Oto_increment_data_with_rad.csv")
 rm(list = ls())
 
 #load phenotype data
-allpike_clust <- fread("Data/pike/clustering/Phenotypes-element-transects-all.csv")
+allpike_clust <- fread("Data/Pike/Clustering/Phenotypes-element-transects-all.csv")
 
 #load element interpolated element data (years not smoothed over for later means)
-oto_elements <- fread("Data/pike/elements/Oto_LA-to-d18O_interpolation_Sr-corrected.csv")
+oto_elements <- fread("Data/Pike/Elements/Oto_LA-to-d18O_interpolation_Sr-corrected.csv")
 
 #load increment data
-pike_inc <- fread("Data/pike/growth/Oto_increment_data_with_rad.csv")
+pike_inc <- fread("Data/Pike/Growth/Oto_increment_data_with_rad.csv")
 
 #join increment data with clustering results
 allpike_clust2 <- allpike_clust%>%
@@ -2246,14 +2208,14 @@ pikedata <- pike_inc%>%
                            capt=="Badendycksgraben"~"Tributary"))%>%
   distinct()
 
-fwrite(pikedata, "Data/pike/growth/Growthdata_element_clusters.csv")
+fwrite(pikedata, "Data/Pike/Growth/Growthdata_element_clusters.csv")
 ```
 
 ```{r join phenotype & genotype & cleanup, include=FALSE, eval=FALSE}
 # cleanup script for GLMM modelling joining phenotype and genotype data
 rm(list = ls())
 
-pikedata <- fread("Data/pike/growth/Growthdata_element_clusters.csv")
+pikedata <- fread("Data/Pike/Growth/Growthdata_element_clusters.csv")
 
 #Inspect data
 head(pikedata)
@@ -2263,31 +2225,6 @@ str(pikedata)
 Phenoarea <- pikedata%>%
   transmute(ID, capt, area, phenotype)%>%
   distinct()
-
-Captures <- ggplot(Phenoarea, aes(phenotype, fill = capt))+
-  geom_bar(position = "fill")+
-  labs(x = "phenotype",
-       y = "percentage")+
-  scale_fill_manual(values = c("#1B9E77", "#D95F02", "#7570B3", "#E7298A", "#66A61E", "#E6AB02", "#A6761D", "#666666","darkblue","darkred","cyan","red","darkgreen", "orange","blue"))+
-  scale_x_discrete(breaks = c(unique(pikedata$phenotype)),
-                   labels = c("freshwater resident", "brackish resident", "cross-habitat", "anadromous"))+
-    scale_y_continuous(breaks = c(0, 0.25, 0.5, 0.75, 1),
-                       labels = c("0", "25", "50", "75", "100"))+
-  theme_classic()
-
-areas <- ggplot(Phenoarea, aes(phenotype, fill = area))+
-  geom_bar(position = "fill")+
-  labs(x = "phenotype",
-       y = "percentage")+
-  scale_fill_manual(values = c("#1B9E77", "#D95F02", "#7570B3", "#E7298A", "#66A61E", "#E6AB02", "#A6761D", "#666666","darkblue","darkred","cyan","red","darkgreen", "orange","blue"))+
-  scale_x_discrete(breaks = c(unique(pikedata$phenotype)),
-                   labels = c("freshwater resident", "brackish resident", "cross-habitat", "anadromous"))+
-    scale_y_continuous(breaks = c(0, 0.25, 0.5, 0.75, 1),
-                       labels = c("0", "25", "50", "75", "100"))+
-  theme_classic()
-
-ggsave("Figure-phenotypes-per-waterbody.png", Captures, height = 8, width = 16, units = "cm", dpi = 600, bg = "white")
-ggsave("Figure-phenotypes-per-boddenchain.png", areas, height = 8, width = 16, units = "cm", dpi = 600, bg = "white")
 
 #Prepare data frame with factors, scale and center element data
 pikes2 <- pikedata%>%
@@ -2307,7 +2244,7 @@ pikes2 <- pikedata%>%
 pikes2[pikes2$ID=="BH-90307",]$sex <- "f"
 
 #Join genotype data
-genotypes <- fread("Data/pike/genetics/discrete-cluster-assignment.csv")
+genotypes <- fread("Data/Pike/Genetics/discrete-cluster-assignment.csv")
 
 genotype_only <- genotypes%>%
   transmute(ID=ID,
@@ -2316,17 +2253,14 @@ genotype_only <- genotypes%>%
 pikes3 <- pikes2%>%
   left_join(genotype_only, by = "ID")
 
-fwrite(pikes3, "Data/pike/growth/Pikedata_model.csv")
-
-#Check
-str(pikes3)
+fwrite(pikes3, "Data/Pike/Growth/Pikedata_model.csv")
 ```
 
 ```{r data exploration, include=FALSE, echo=FALSE, eval=FALSE, fig.height=6, fig.width=8}
 rm(list = ls())
 
 #read in model data
-pikes <- fread("Data/pike/growth/Pikedata_model.csv")
+pikes <- fread("Data/Pike/Growth/Pikedata_model.csv")
 
 #Exploration script
 par(mfrow=c(2,2))
@@ -2356,7 +2290,7 @@ plot(0, xaxt = 'n', yaxt = 'n', bty = 'n', pch = '', ylab = '', xlab = '')
 rm(list = ls())
 
 #read in model data
-pikes <- fread("Data/pike/growth/Pikedata_model.csv")
+pikes <- fread("Data/Pike/Growth/Pikedata_model.csv")
 
 #Run model
 pikemodel.1 <- lmer(log10(inc_um)~lifeyear+exp(-lifeyear)+sex+res_mean+Sr_mean+lifeyear*phenotype+lifeyear*genotype+(1|ID),
@@ -2372,8 +2306,7 @@ summary(pikemodel.1)
 #Check variance inflation factors
 pike.vif <- vif(pikemodel.1.1)
 
-barplot(pike.vif[,3], main = "VIF values", horiz = F, col = "darkgreen", ylim = c(0,10),
-        las = 2)
+barplot(pike.vif[,3], main = "VIF values", horiz = F, col = "darkgreen", ylim = c(0,10), las = 2)
 abline(h = 5, lwd = 3, lty = 2, col="red")
 # Lifeyear (age) crosses a VIF of 5, as it is obviously autocorrelated with age^2, which we deemed acceptable in the context
 # of our model, as we aimed only at accounting for allometry, not evaluate the effect of age directly
@@ -2383,7 +2316,7 @@ abline(h = 5, lwd = 3, lty = 2, col="red")
 rm(list = ls())
 
 #read in model data
-pikes <- fread("Data/pike/growth/Pikedata_model.csv")
+pikes <- fread("Data/Pike/Growth/Pikedata_model.csv")
 
 #run model
 pikemodel.1<- lmer(log10(inc_um)~res_mean+lifeyear*phenotype+lifeyear*genotype+I(lifeyear^2)+Sr_mean+sex+(1|ID),
@@ -2451,7 +2384,7 @@ anova(pikemodel.1.1, pikemodel.nosex)
 rm(list = ls())
 
 #read in model data
-pikes <- fread("Data/pike/growth/Pikedata_model.csv")
+pikes <- fread("Data/Pike/Growth/Pikedata_model.csv")
 
 pikemodel.final <- lmer(log10(inc_um)~res_mean+lifeyear*phenotype+I(lifeyear^2)+Sr_mean+sex+(1|ID),
                     REML = F, data = pikes)
@@ -2466,7 +2399,7 @@ tab_model(pikemodel.final, show.fstat = T, show.loglik = T, digits.re = 20, show
 rm(list = ls())
 
 #read in model data
-pikes <- fread("Data/pike/growth/Pikedata_model.csv")
+pikes <- fread("Data/Pike/Growth/Pikedata_model.csv")
 
 #validation
 pikemodel.final <- lmer(log10(inc_um)~res_mean+lifeyear*phenotype+I(lifeyear^2)+Sr_mean+sex+(1|ID),
@@ -2474,12 +2407,12 @@ pikemodel.final <- lmer(log10(inc_um)~res_mean+lifeyear*phenotype+I(lifeyear^2)+
 
 pikes$resid <- resid(pikemodel.final)
 
-png(filename = "Figures/supplement/S2_residual_plot.png", width = 5000, height = 2500, res = 600)
+png(filename = "Figures/Supplement/S2_residual_plot.png", width = 5000, height = 2500, res = 600)
 plot(pikemodel.final, xlab = "Fitted", ylab = "Residuals")
 dev.off()
 
-png(filename = "Figures/supplement/S3_residual_hist.png", width = 5000, height = 2500, res = 600)
-hist(pikes2$resid, main = "", xlab = "Residuals")
+png(filename = "Figures/Supplement/S3_residual_hist.png", width = 5000, height = 2500, res = 600)
+hist(pikes$resid, main = "", xlab = "Residuals")
 dev.off()
 
 png(filename = "Figures/supplement/S4_qqnorm.png", width = 5000, height = 2500, res = 600)
@@ -2489,18 +2422,18 @@ dev.off()
 
 png(filename = "Figures/supplement/S5_params.png", width = 5000, height = 2500, res = 600)
 par(mfrow=c(2,3))
-plot(pikes2$resid~as.factor(pikes2$phenotype), ylab = "Residuals", xlab = "", las = 2)
-plot(pikes2$resid~as.factor(pikes2$sex), ylab = "Residuals", xlab = "Sex")
-plot(pikes2$resid~pikes2$lifeyear, ylab = "Residuals", xlab = "Age")
-plot(pikes2$resid~pikes2$res_mean, ylab = "Residuals", xlab = "d18O")
-plot(pikes2$resid~pikes2$Sr_mean, ylab = "Residuals", xlab = "Sr concentration")
+plot(pikes$resid~as.factor(pikes$phenotype), ylab = "Residuals", xlab = "", las = 2)
+plot(pikes$resid~as.factor(pikes$sex), ylab = "Residuals", xlab = "Sex")
+plot(pikes$resid~pikes$lifeyear, ylab = "Residuals", xlab = "Age")
+plot(pikes$resid~pikes$res_mean, ylab = "Residuals", xlab = "d18O")
+plot(pikes$resid~pikes$Sr_mean, ylab = "Residuals", xlab = "Sr concentration")
 dev.off()
 ```
 
 ```{r figures for abiotic main effects, eval=FALSE}
 rm(list = ls())
 
-pikes <- fread("Data/pike/growth/Pikedata_model.csv")
+pikes <- fread("Data/Pike/Growth/Pikedata_model.csv")
 
 #factorize temperature
 pikes$agefact <- ifelse(pikes$lifeyear<3, 2, 
@@ -2517,9 +2450,9 @@ mypallette <- viridis::viridis(4, direction = -1)
 Temp <- ggplot(pikes, aes(res_mean, log(inc_um), color=agefact2))+
   geom_point(size=.5)+
   stat_smooth(method = "lm", fill="gray", fullrange = T, lwd=.8)+
-  labs(x=expression("scaled"~delta^18*"O"~("z-score")), 
-       y=expression("log increment"~(mu*"m")),
-       color="age class")+
+  labs(x=expression("Scaled"~delta^18*"O"~("z-score")), 
+       y=expression("Log increment"~(mu*"m")),
+       color="Age class")+
   scale_y_continuous(limits = c(4, 7.5))+
   scale_color_viridis_d()+
   theme_classic()+
@@ -2535,13 +2468,13 @@ Temp <- ggplot(pikes, aes(res_mean, log(inc_um), color=agefact2))+
         legend.title = element_text(size = 15, colour = "black"),
         legend.key.size = unit(.8,"line"))+
   coord_cartesian(clip = "off")+
-  annotation_custom(grob = text_grob(label = "log likelihood ratio = 20.79, p < 0.001***",
+  annotation_custom(grob = text_grob(label = "Log likelihood ratio = 20.79, p < 0.001***",
                     face = "plain", size = 10, just = "left"), ymin = 7.5, ymax = 7.5, xmin = -3, xmax = -3)+
   geom_segment(x=0, y=3.2, xend=2.5, yend=3.2, 
                lineend = "butt", linejoin = "mitre",
                size=3, arrow = arrow(length = unit(0.18, "inches")),
                color="#66CCCC")+
-  annotation_custom(grob = text_grob(label = "colder", 
+  annotation_custom(grob = text_grob(label = "Colder", 
                                      rot = 0, face = "plain", size = 13),
                                      ymin=3.22, ymax=3.22,
                                      xmin=0, xmax=2.5)+
@@ -2549,7 +2482,7 @@ Temp <- ggplot(pikes, aes(res_mean, log(inc_um), color=agefact2))+
                lineend = "butt", linejoin = "mitre",
                size=3, arrow = arrow(length = unit(0.18, "inches")),
                color="#FF6666")+
-  annotation_custom(grob = text_grob(label = "warmer", 
+  annotation_custom(grob = text_grob(label = "Warmer", 
                                      rot = -0, face = "plain", size = 13),
                                      ymin=3.22, ymax=3.22,
                                      xmin=0, xmax=-2.5)
@@ -2557,9 +2490,9 @@ Temp <- ggplot(pikes, aes(res_mean, log(inc_um), color=agefact2))+
 Sal <- ggplot(pikes, aes(Sr_mean, log(inc_um), color=agefact2))+
   geom_point(size=.5)+
   stat_smooth(method = "lm", fill="gray", fullrange = T, lwd=.8)+
-  labs(x=expression("scaled"~"Sr/Ca"~("z-score")), 
-       y=expression("log increment"~(mu*"m")),
-       color="age class")+
+  labs(x=expression("Scaled"~"Sr/Ca"~("z-score")), 
+       y=expression("Log increment"~(mu*"m")),
+       color="Age class")+
   scale_y_continuous(limits = c(4, 7.5))+
   scale_color_viridis_d()+
   theme_classic()+
@@ -2579,31 +2512,30 @@ Sal <- ggplot(pikes, aes(Sr_mean, log(inc_um), color=agefact2))+
                lineend = "butt", linejoin = "mitre",
                size=3, arrow = arrow(length = unit(0.18, "inches")),
                color="darkorange")+
-  annotation_custom(grob = text_grob(label = "log likelihood ratio = 9.72, p < 0.01**",
+  annotation_custom(grob = text_grob(label = "Log likelihood ratio = 9.72, p < 0.01**",
                     face = "plain", size = 10, just = "left"), ymin = 7.5, ymax = 7.5, xmin = -2, xmax = -2)+
-  annotation_custom(grob = text_grob(label = "higher salinity", 
+  annotation_custom(grob = text_grob(label = "Higher salinity", 
                                      rot = 0, face = "plain", size = 13),
                                      ymin=3.22, ymax=3.22,
-                                     xmin= 0.5, xmax=1.5)+
+                                     xmin= 0.6, xmax=1.6)+
   geom_segment(x=0, y=3.2, xend=-2, yend=3.2, 
                lineend = "butt", linejoin = "mitre",
                size=3, arrow = arrow(length = unit(0.18, "inches")),
                color="lightblue")+
-  annotation_custom(grob = text_grob(label = "lower salinity", 
+  annotation_custom(grob = text_grob(label = "Lower salinity", 
                                      rot = -0, face = "plain", size = 13),
                                      ymin=3.22, ymax=3.22,
-                                     xmin= -0.5, xmax= -1.5)
+                                     xmin= -0.6, xmax= -1.6)
 
 Tempsal <- ggarrange(Temp, Sal, nrow = 1, labels = c("A", "B"), common.legend = T)
 
-ggsave("Figures/MS/Temperature-Salinity-effect-growth.png", Tempsal,
-       width = 16, height = 9, units = "cm", dpi = 600, bg = "white")
+ggsave("Figures/MS/PDF/Fig5.pdf", Tempsal, width = 16, height = 9, units = "cm", dpi = 600, bg = "white")
 ```
 
 ```{r figure for phenotye effect, eval=TRUE}
 rm(list = ls())
 
-pikes <- fread("Data/pike/growth/Pikedata_model.csv")
+pikes <- fread("Data/Pike/Growth/Pikedata_model.csv")
 
 pikemodel.final <- lmer(log10(inc_um)~res_mean+lifeyear*phenotype+I(lifeyear^2)+Sr_mean+sex+(1|ID),
                     REML = F, data = pikes)
@@ -2637,13 +2569,13 @@ Newdata2$phenotype <- fct_relevel(Newdata2$phenotype, "FW_resident", "Anadromous
 
 phenogrowth <- ggplot(Newdata2, aes(factor(lifeyear), prediction, fill=phenotype), alpha=0.6)+
   geom_boxplot(lwd=.5, outlier.shape = NA, width=.6, position = position_dodge(width = NULL), color="black")+
-  labs(x="Age (years)", y=expression("predicted increment"~(mu*"m")),
-       fill="behavioral phenotype")+
+  labs(x="Age (years)", y=expression("Predicted increment"~(mu*"m")),
+       fill="Behavioral phenotype")+
   scale_x_discrete(limits=factor(c(1:11)),
                    breaks=c("1","2","3","4","5","6","7","8","9","10","11"))+
   scale_fill_manual(breaks = c("FW_resident","Anadromous","Trans-habitat","BW-resident"),
                     values = c("#C5D86D","#00BFB2","#F1C40F","#004643"),
-                    labels = c("freshwater resident (N = 27)", "anadromous (N = 21)","cross-habitat (N = 28)", "brackish resident (N = 44)"))+
+                    labels = c("Freshwater resident (N = 27)", "Anadromous (N = 21)","Cross-habitat (N = 28)", "Brackish resident (N = 44)"))+
   theme_classic()+
   theme(panel.grid.major = element_line(),
         legend.position = c(.715,.79),
@@ -2659,13 +2591,13 @@ phenogrowth <- ggplot(Newdata2, aes(factor(lifeyear), prediction, fill=phenotype
         legend.title = element_text(size = 30, colour = "black"),
         legend.key.size = unit(2.5,"line"))
 
-ggsave("Figures/MS/Phenotype-effects-growth.png", phenogrowth, width = 16, height = 8, dpi = 600, bg = "white")
+ggsave("Figures/MS/PDF/Fig6.pdf", phenogrowth, width = 16, height = 8, dpi = 600, bg = "white")
 ```
 
 ```{r figure for genotype effect, eval=TRUE}
 rm(list = ls())
 
-pikes <- fread("Data/pike/growth/Pikedata_model.csv")
+pikes <- fread("Data/Pike/Growth/Pikedata_model.csv")
 pikes[pikes$genotype == ""]$genotype <- NA
 
 pikes <- pikes%>%
@@ -2704,14 +2636,14 @@ Newdata2$genotype <- fct_relevel(Newdata2$genotype, "2", "1", "3", "4", "U")
 
 Genogrowth <- ggplot(Newdata2, aes(factor(lifeyear), prediction, fill=genotype), alpha=0.6)+
   geom_boxplot(lwd=.5, outlier.shape = NA, width=.6, position = position_dodge(width = NULL), color="black")+
-  labs(x="Age (years)", y=expression("increment"~(mu*"m")),
-       fill="genotype")+
+  labs(x="Age (years)", y=expression("Increment"~(mu*"m")),
+       fill="Genotype")+
   scale_x_discrete(limits=factor(c(1:11)),
                    breaks=c("1","2","3","4","5","6","7","8","9","10","11"))+
   scale_fill_manual(breaks = c("2","1","3","4","U"),
                     values = c("#C5D86D","#00BFB2","#F1C40F","#004643","#AF3800"),
-                    labels = c("putative freshwater (N = 19)", "putative anadromous (N = 17)",
-                               "putative brackish 1 (N = 13)", "putative brackish 2 (N = 22)", "unassigned (N = 28)"))+
+                    labels = c("Putative freshwater (N = 19)", "Putative anadromous (N = 17)",
+                               "Putative brackish 1 (N = 13)", "Putative brackish 2 (N = 22)", "Unassigned (N = 28)"))+
   theme_classic()+
   theme(panel.grid.major = element_line(),
         legend.position = c(.715,.79),
@@ -2727,7 +2659,7 @@ Genogrowth <- ggplot(Newdata2, aes(factor(lifeyear), prediction, fill=genotype),
         legend.title = element_text(size = 30, colour = "black"),
         legend.key.size = unit(2.5,"line"))
 
-ggsave("Figures/supplement/Genotype-effects-growth.png", Genogrowth, width = 16, height = 8, dpi = 600, bg = "white")
+ggsave("Figures/Supplement/Genotype-effects-growth.png", Genogrowth, width = 16, height = 8, dpi = 600, bg = "white")
 ```
 
 ## Lifelong growth
@@ -2735,7 +2667,7 @@ ggsave("Figures/supplement/Genotype-effects-growth.png", Genogrowth, width = 16,
 rm(list = ls())
 
 # load data
-pikedata <- fread("Data/pike/growth/Pikedata_model.csv")
+pikedata <- fread("Data/Pike/Growth/Pikedata_model.csv")
 
 # Cleanup
 growthdata <- pikedata %>%
@@ -2758,14 +2690,14 @@ growthdata <- pikedata %>%
                                      genotype == "4" ~ 4,
                                      genotype == "U" ~ 5))
 
-fwrite(growthdata, file = "Data/Pike/growth/Pikedata_Stan.csv")
+fwrite(growthdata, file = "Data/Pike/Growth/Pikedata_Stan.csv")
 ```
 
 ```{r run phenotype model and save output, include=FALSE, eval=FALSE}
 rm(list = ls())
 
-source("Data/pike/growth/funcs.r")
-growthdata <- fread("Data/Pike/growth/Pikedata_Stan.csv")
+source("Data/Pike/Growth/funcs.r")
+growthdata <- fread("Data/Pike/Growth/Pikedata_Stan.csv")
 
 
 standata_growth = list(
@@ -2779,21 +2711,21 @@ fishtable = unique(growthdata[, c("ID2", "phenotype_num")])
 fishtable = fishtable[order(fishtable$ID2), ]
 standata_growth$pheno_id_fish = fishtable$phenotype_num
 
-stancode_i = ("Data/pike/growth/gm_gamma_inv_phenotype.stan")
+stancode_i = ("Data/Pike/Growth/gm_gamma_inv_phenotype.stan")
 mod_i = stan_model(stancode_i, model_name = "Individual pike growth")
 
 fit_gamma_i = sampling(mod_i, iter = 10000, data = standata_growth, init = init_fun,
 					 control = list(adapt_delta = 0.99, max_treedepth = 20), chains = 4, thin = 5)
 
-saveRDS(fit_gamma_i, "Data/pike/growth/fit_gamma_i_phenotype.rds")
+saveRDS(fit_gamma_i, "Data/Pike/Growth/fit_gamma_i_phenotype.rds")
 
 p = c("LInf", "tZero", "k", "LInf_pheno", "tZero_pheno", "k_pheno")
 samps_a = as.array(fit_gamma_i, pars = p)
 
-png("Figures/supplement/trace.png", w = 1500, h = 1500)
+png("Figures/Supplement/trace.png", w = 1500, h = 1500)
 	bayesplot::mcmc_trace(samps_a)
 dev.off()
-png("Figures/supplement/intervals.png", w = 1500, h = 1500)
+png("Figures/Supplement/intervals.png", w = 1500, h = 1500)
 	bayesplot::mcmc_intervals(samps_a)
 dev.off()
 
@@ -2813,8 +2745,8 @@ knitr::kable(tab)
 ```{r run genotype model and save output, include=FALSE, eval=FALSE}
 rm(list = ls())
 
-source("Data/pike/growth/funcs.r")
-growthdata <- fread("Data/Pike/growth/Pikedata_Stan.csv")
+source("Data/Pike/Growth/funcs.r")
+growthdata <- fread("Data/Pike/Growth/Pikedata_Stan.csv")
 
 #Remove NA
 growthdata <- growthdata%>%
@@ -2843,10 +2775,10 @@ saveRDS(fit_gamma_i, "Data/pike/growth/fit_gamma_i_genotype.rds")
 p = c("LInf", "tZero", "k", "LInf_geno", "tZero_geno", "k_geno")
 samps_a = as.array(fit_gamma_i, pars = p)
 
-png("Figures/supplement/trace_geno.png", w = 1500, h = 1500)
+png("Figures/Supplement/trace_geno.png", w = 1500, h = 1500)
 	bayesplot::mcmc_trace(samps_a)
 dev.off()
-png("Figures/supplement/intervals_geno.png", w = 1500, h = 1500)
+png("Figures/Supplement/intervals_geno.png", w = 1500, h = 1500)
 	bayesplot::mcmc_intervals(samps_a)
 dev.off()
 
@@ -2866,8 +2798,8 @@ knitr::kable(tab)
 ```{r run ecotype model and save output, include=FALSE, eval=FALSE}
 rm(list = ls())
 
-source("Data/pike/growth/funcs.r")
-growthdata <- fread("Data/Pike/growth/Pikedata_Stan.csv")
+source("Data/Pike/Growth/funcs.r")
+growthdata <- fread("Data/Pike/Growth/Pikedata_Stan.csv")
 
 growthdata2 <- growthdata%>%
   mutate(ecotype_char = case_when(phenotype_char == "FW-resident" ~ "Freshwater",
@@ -2879,7 +2811,7 @@ growthdata2 <- growthdata%>%
                                   phenotype_char == "Trans-habitat" ~ 2,
                                   phenotype_char == "BW-resident" ~ 3))
 
-fwrite(growthdata2, "Data/Pike/growth/Pikedata_Stan_eco.csv")
+fwrite(growthdata2, "Data/Pike/Growth/Pikedata_Stan_eco.csv")
 
 #Remove NA
 growthdata <- growthdata2%>%
@@ -2897,21 +2829,21 @@ fishtable = unique(growthdata2[, c("ID2", "ecotype_num")])
 fishtable = fishtable[order(fishtable$ID2), ]
 standata_growth$eco_id_fish = fishtable$ecotype_num
 
-stancode_i = ("Data/pike/growth/gm_gamma_inv_ecotype.stan")
+stancode_i = ("Data/Pike/Growth/gm_gamma_inv_ecotype.stan")
 mod_i = stan_model(stancode_i, model_name = "Individual pike growth")
 
 fit_gamma_i = sampling(mod_i, iter = 10000, data = standata_growth, init = init_fun,
 					 control = list(adapt_delta = 0.99, max_treedepth = 20), chains = 4, thin = 5)
 
-saveRDS(fit_gamma_i, "Data/pike/growth/fit_gamma_i_ecotype.rds")
+saveRDS(fit_gamma_i, "Data/Pike/Growth/fit_gamma_i_ecotype.rds")
 
 p = c("LInf", "tZero", "k", "LInf_eco", "tZero_eco", "k_eco")
 samps_a = as.array(fit_gamma_i, pars = p)
 
-png("Figures/supplement/trace_eco.png", w = 1500, h = 1500)
+png("Figures/Supplement/trace_eco.png", w = 1500, h = 1500)
 	bayesplot::mcmc_trace(samps_a)
 dev.off()
-png("Figures/supplement/intervals_eco.png", w = 1500, h = 1500)
+png("Figures/Supplement/intervals_eco.png", w = 1500, h = 1500)
 	bayesplot::mcmc_intervals(samps_a)
 dev.off()
 
@@ -2932,11 +2864,11 @@ knitr::kable(tab)
 rm(list = ls())
 
 # Ectype codes: 1 = "Brackish resident"; 2 = "Freshwater resident"; 3 = "Anadromous"; 4 = "Cross-habitat"
-fit_gamma_i <- readRDS("Data/pike/growth/fit_gamma_i_phenotype.rds")
-growthdata <- fread("Data/pike/growth/Pikedata_Stan.csv")
+fit_gamma_i <- readRDS("Data/Pike/Growth/fit_gamma_i_phenotype.rds")
+growthdata <- fread("Data/Pike/Growth/Pikedata_Stan.csv")
 
 mypallette <- c("#C5D86D","#00BFB2","#F1C40F","#004643")
-mylabel <- c("freshwater resident (N = 27)","anadromous (N = 21)","cross-habitat (N = 28)", "brackish resident (N = 44)")
+mylabel <- c("Freshwater resident (N = 27)","Anadromous (N = 21)","Cross-habitat (N = 28)", "Brackish resident (N = 44)")
 
 Incpredict = function(pars, Agei) pars[1] * (1 - exp(-pars[2] * (Agei - (-pars[3]))))
 
@@ -3000,7 +2932,7 @@ pl_curves = list()
 			geom_point(data = dat[dat$phenotype_num == i, ], 
 					   aes(x = lifeyear, y = rad_mm, group = ID), size = 1, alpha = .9, color="black") + 
 		  ylim(0,3.8)+scale_x_continuous(breaks = seq(1,15,1), labels = c("1","","3","","5","","7","","9","","11","","13","","15"))+
-			pl_theme + labs(x="Age", y="otolith radius (um)")
+			pl_theme + labs(x="Age", y="Otolith radius (um)")
 	}
 	pl_curves$nrow = 2
 	do.call(grid.arrange, pl_curves)
@@ -3012,17 +2944,17 @@ phenocurves2 <- ggarrange(phenocurves)
 
 phenocurves3 <- annotate_figure(phenocurves2, 
                               bottom = text_grob("Age (years)", rot = 0, size = 15), 
-                              left = text_grob(expression("otolith radius"~(mu~"m")), rot = 90, size = 15))
+                              left = text_grob(expression("Otolith radius"~(mu~"m")), rot = 90, size = 15))
 
-ggsave("Figures/MS/Individual_growth_phenotypes-revised.png", phenocurves3, width = 15, height = 15, units = "cm", dpi = 600, bg = "white")
+ggsave("Figures/MS/PDF/Fig7.pdf", phenocurves3, width = 15, height = 15, units = "cm", dpi = 600, bg = "white")
 ```
 
 ```{r figure VB curves genotype, include=FALSE, eval=FALSE}
 rm(list = ls())
 
 # Genotype codes: 1 = "putative freshwater"; 2 = "putative brackish"; 3 = "putative anadromous"; 4 = "unassigned"
-fit_gamma_i <- readRDS("Data/pike/growth/fit_gamma_i_genotype.rds")
-growthdata <- fread("Data/pike/growth/Pikedata_Stan.csv")
+fit_gamma_i <- readRDS("Data/Pike/Growth/fit_gamma_i_genotype.rds")
+growthdata <- fread("Data/Pike/Growth/Pikedata_Stan.csv")
 
 growthdata <- growthdata%>%
   drop_na(genotype_num)%>%
@@ -3030,8 +2962,8 @@ growthdata <- growthdata%>%
 
 
 mypallette <- c("#00BFB2", "#C5D86D", "#004643", "#F1C40F", "#AF3800")
-mylabel <- c("anadromous (N = 16)","freshwater (N = 22)","brackish 1 (N = 13)", "brackish 2 (N = 22)",
-             "unassigned (N = 28)")
+mylabel <- c("Anadromous (N = 16)","Freshwater (N = 22)","Brackish 1 (N = 13)", "Brackish 2 (N = 22)",
+             "Unassigned (N = 28)")
 
 Incpredict = function(pars, Agei) pars[1] * (1 - exp(-pars[2] * (Agei - (-pars[3]))))
 
@@ -3108,9 +3040,9 @@ genocurves2 <- ggarrange(genocurves)
 
 genocurves3 <- annotate_figure(genocurves2, 
                               bottom = text_grob("Age (years)", rot = 0, size = 15), 
-                              left = text_grob(expression("otolith radius"~(mu~"m")), rot = 90, size = 15))
+                              left = text_grob(expression("Otolith radius"~(mu~"m")), rot = 90, size = 15))
 
-ggsave("Figures/supplement/Individual_growth_genotypes_revised.png", genocurves3, 
+ggsave("Figures/Supplement/Individual_growth_genotypes_revised.png", genocurves3, 
        width = 15, height = 15, units = "cm", dpi = 600, bg = "white")
 ```
 
@@ -3118,11 +3050,11 @@ ggsave("Figures/supplement/Individual_growth_genotypes_revised.png", genocurves3
 rm(list = ls())
 
 # Ectype codes: 1 = "Brackish resident"; 2 = "Freshwater resident"; 3 = "Anadromous"; 4 = "Cross-habitat"
-fit_gamma_i <- readRDS("Data/pike/growth/fit_gamma_i_ecotype.rds")
-growthdata <- fread("Data/Pike/growth/Pikedata_Stan_eco.csv")
+fit_gamma_i <- readRDS("Data/Pike/Growth/fit_gamma_i_ecotype.rds")
+growthdata <- fread("Data/Pike/Growth/Pikedata_Stan_eco.csv")
 
 mypallette <- c("#C5D86D","#00BFB2","#F1C40F","#004643")
-mylabel <- c("freshwater-adapted (N = 48)", "cross-habitat (N = 28)", "brackish-adapted (N = 44)")
+mylabel <- c("Freshwater-adapted (N = 48)", "Cross-habitat (N = 28)", "Brackish-adapted (N = 44)")
 
 Incpredict = function(pars, Agei) pars[1] * (1 - exp(-pars[2] * (Agei - (-pars[3]))))
 
@@ -3198,15 +3130,15 @@ ecocurves2 <- ggarrange(ecocurves)
 
 ecocurves3 <- annotate_figure(ecocurves2, 
                               bottom = text_grob("Age (years)", rot = 0, size = 15), 
-                              left = text_grob(expression("otolith radius"~(mu~"m")), rot = 90, size = 15))
+                              left = text_grob(expression("Otolith radius"~(mu~"m")), rot = 90, size = 15))
 
-ggsave("Figures/supplement/Individual_growth_ecotypes-revised.png", ecocurves3, width = 15, height = 15, units = "cm", dpi = 600, bg = "white")
+ggsave("Figures/Supplement/Individual_growth_ecotypes-revised.png", ecocurves3, width = 15, height = 15, units = "cm", dpi = 600, bg = "white")
 ```
 
 ```{r growth curve evaluation phenotype, include=FALSE, eval=FALSE}
 rm(list = ls())
 #Evaluation of Stan model for individual fish
-fit <- readRDS("Data/pike/growth/fit_gamma_i_phenotype.rds")
+fit <- readRDS("Data/Pike/Growth/fit_gamma_i_phenotype.rds")
 #write data matrix for plotting
 samples <- as.array(fit, pars=c("LInf_pheno", "k_pheno", "tZero_pheno", "phi"))
 head(samples)
@@ -3230,36 +3162,36 @@ summary(fit, pars = c("tZero_pheno"))
 summary(fit, pars = c("phi"))
 
 #MCMC combo plots
-png(filename = "Figures/supplement/histtrace_LInf_pheno.png", width = 5000, height = 2500, res = 600)
+png(filename = "Figures/Supplement/histtrace_LInf_pheno.png", width = 5000, height = 2500, res = 600)
 mcmc_combo(samples, c("hist", "trace"), pars = c("LInf_pheno[1]", "LInf_pheno[2]", "LInf_pheno[3]", "LInf_pheno[4]"))
 dev.off()
 
-png(filename = "Figures/supplement/histtrace_k_pheno.png", width = 5000, height = 2500, res = 600)
+png(filename = "Figures/Supplement/histtrace_k_pheno.png", width = 5000, height = 2500, res = 600)
 mcmc_combo(samples, c("hist", "trace"), pars = c("k_pheno[1]", "k_pheno[2]", "k_pheno[3]", "k_pheno[4]"))
 dev.off()
 
-png(filename = "Figures/supplement/histtrace_tZero_pheno.png", width = 5000, height = 2500, res = 600)
+png(filename = "Figures/Supplement/histtrace_tZero_pheno.png", width = 5000, height = 2500, res = 600)
 mcmc_combo(samples, c("hist", "trace"), pars = c("tZero_pheno[1]", "tZero_pheno[2]", "tZero_pheno[3]", "tZero_pheno[4]"))
 dev.off()
 
-png(filename = "Figures/supplement/histtrace_phi_pheno.png", width = 5000, height = 2500, res = 600)
+png(filename = "Figures/Supplement/histtrace_phi_pheno.png", width = 5000, height = 2500, res = 600)
 mcmc_combo(samples, c("hist", "trace"), pars = c("phi"))
 dev.off()
 
 #Pairs plots
-png(filename = "Figures/supplement/pairs_pheno1.png", width = 5000, height = 2500, res = 600)
+png(filename = "Figures/Supplement/pairs_pheno1.png", width = 5000, height = 2500, res = 600)
 pairs(fit, pars = c("LInf_pheno[1]", "k_pheno[1]", "tZero_pheno[1]","phi"))
 dev.off()
 
-png(filename = "Figures/supplement/pairs_pheno2.png", width = 5000, height = 2500, res = 600)
+png(filename = "Figures/Supplement/pairs_pheno2.png", width = 5000, height = 2500, res = 600)
 pairs(fit, pars = c("LInf_pheno[2]", "k_pheno[2]", "tZero_pheno[2]", "phi"))
 dev.off()
 
-png(filename = "Figures/supplement/pairs_pheno3.png", width = 5000, height = 2500, res = 600)
+png(filename = "Figures/Supplement/pairs_pheno3.png", width = 5000, height = 2500, res = 600)
 pairs(fit, pars = c("LInf_pheno[3]", "k_pheno[3]", "tZero_pheno[3]", "phi"))
 dev.off()
 
-png(filename = "Figures/supplement/pairs_pheno4.png", width = 5000, height = 2500, res = 600)
+png(filename = "Figures/Supplement/pairs_pheno4.png", width = 5000, height = 2500, res = 600)
 pairs(fit, pars = c("LInf_pheno[4]", "k_pheno[4]", "tZero_pheno[4]", "phi"))
 dev.off()
 ```
@@ -3267,7 +3199,7 @@ dev.off()
 ```{r growth curve evaluation genotype, include=FALSE, eval=FALSE}
 rm(list = ls())
 #Evaluation of Stan model for individual fish
-fit <- readRDS("Data/pike/growth/fit_gamma_i_genotype.rds")
+fit <- readRDS("Data/Pike/Growth/fit_gamma_i_genotype.rds")
 #write data matrix for plotting
 samples <- as.array(fit, pars=c("LInf_geno", "k_geno", "tZero_geno", "phi"))
 head(samples)
@@ -3291,36 +3223,36 @@ summary(fit, pars = c("tZero_geno"))
 summary(fit, pars = c("phi"))
 
 #MCMC combo plots
-png(filename = "Figures/supplement/histtrace_LInf_geno.png", width = 5000, height = 2500, res = 600)
+png(filename = "Figures/Supplement/histtrace_LInf_geno.png", width = 5000, height = 2500, res = 600)
 mcmc_combo(samples, c("hist", "trace"), pars = c("LInf_geno[1]", "LInf_geno[2]", "LInf_geno[3]", "LInf_geno[4]"))
 dev.off()
 
-png(filename = "Figures/supplement/histtrace_k_geno.png", width = 5000, height = 2500, res = 600)
+png(filename = "Figures/Supplement/histtrace_k_geno.png", width = 5000, height = 2500, res = 600)
 mcmc_combo(samples, c("hist", "trace"), pars = c("k_geno[1]", "k_geno[2]", "k_geno[3]", "k_geno[4]"))
 dev.off()
 
-png(filename = "Figures/supplement/histtrace_tZero_geno.png", width = 5000, height = 2500, res = 600)
+png(filename = "Figures/Supplement/histtrace_tZero_geno.png", width = 5000, height = 2500, res = 600)
 mcmc_combo(samples, c("hist", "trace"), pars = c("tZero_geno[1]", "tZero_geno[2]", "tZero_geno[3]", "tZero_geno[4]"))
 dev.off()
 
-png(filename = "Figures/supplement/histtrace_phi_geno.png", width = 5000, height = 2500, res = 600)
+png(filename = "Figures/Supplement/histtrace_phi_geno.png", width = 5000, height = 2500, res = 600)
 mcmc_combo(samples, c("hist", "trace"), pars = c("phi"))
 dev.off()
 
 #Pairs plots
-png(filename = "Figures/supplement/pairs_geno1.png", width = 5000, height = 2500, res = 600)
+png(filename = "Figures/Supplement/pairs_geno1.png", width = 5000, height = 2500, res = 600)
 pairs(fit, pars = c("LInf_geno[1]", "k_geno[1]", "tZero_geno[1]","phi"))
 dev.off()
 
-png(filename = "Figures/supplement/pairs_geno2.png", width = 5000, height = 2500, res = 600)
+png(filename = "Figures/Supplement/pairs_geno2.png", width = 5000, height = 2500, res = 600)
 pairs(fit, pars = c("LInf_geno[2]", "k_geno[2]", "tZero_geno[2]", "phi"))
 dev.off()
 
-png(filename = "Figures/supplement/pairs_geno3.png", width = 5000, height = 2500, res = 600)
+png(filename = "Figures/Supplement/pairs_geno3.png", width = 5000, height = 2500, res = 600)
 pairs(fit, pars = c("LInf_geno[3]", "k_geno[3]", "tZero_geno[3]", "phi"))
 dev.off()
 
-png(filename = "Figures/supplement/pairs_geno4.png", width = 5000, height = 2500, res = 600)
+png(filename = "Figures/Supplement/pairs_geno4.png", width = 5000, height = 2500, res = 600)
 pairs(fit, pars = c("LInf_geno[4]", "k_geno[4]", "tZero_geno[4]", "phi"))
 dev.off()
 ```
@@ -3333,10 +3265,10 @@ dev.off()
 rm(list = ls())
 
 #Load phenotype-genotype data with assignment probabilities
-Otogen_prob <- fread("Data/pike/genetics/Phenotype-genotype-four-clusters.csv")
+Otogen_prob <- fread("Data/Pike/Genetics/Phenotype-genotype-four-clusters.csv")
 
 #Load phenotype-gentype data with discrete genotype assignments
-Otogen_discrete <- fread("Data/pike/genetics/discrete-cluster-assignment.csv")
+Otogen_discrete <- fread("Data/Pike/Genetics/discrete-cluster-assignment.csv")
 
 #Test if phenotype is predicted by genotype
 chisq.test(table(Otogen_discrete$phenotype, Otogen_discrete$hardclust))
@@ -3431,14 +3363,14 @@ pairwise.perm.manova(Genetics_loc, Otogen_prob3$waterbody, test = c("Wilks"), np
 rm(list = ls())
 
 #Read in data
-Genotypes <- fread("Data/pike/genetics/Genotype-phenotype-combined.csv")
+Genotypes <- fread("Data/Pike/Genetics/Genotype-phenotype-combined.csv")
 
 Genotypes2 <- Genotypes%>%
   mutate(cluster_lvl=fct_relevel(cluster,
-                                 "freshwater",
-                                 "anadromous",
-                                 "brackish 1",
-                                 "brackish 2"))
+                                 "Freshwater",
+                                 "Anadromous",
+                                 "Brackish 1",
+                                 "Brackish 2"))
 
 #subset according to behavioral phenotype
 df_F <- subset(Genotypes2, phenotype == "FW_resident")
@@ -3458,7 +3390,7 @@ pl_theme1 =	theme_classic() +
 		  axis.title.x = element_blank(),
 		  axis.title.y = element_blank(),
 		  plot.title = element_text(size = 12, colour = "black", hjust = .6),
-		  plot.margin = unit(c(.8,0,-1.4,1), "cm"),
+		  plot.margin = unit(c(.8,0.15,-1.4,1), "cm"),
 		  legend.position = "none")
 
 pl_theme2 =	theme_classic() +
@@ -3486,7 +3418,7 @@ pl_theme3 =	theme_classic() +
 		  axis.title.x = element_blank(),
 		  axis.title.y = element_blank(),
 		  plot.title = element_text(size = 12, colour = "black"),
-		  plot.margin = unit(c(-0.8,0,0,1), "cm"),
+		  plot.margin = unit(c(-0.8,0.15,0,1), "cm"),
 		  legend.position = "none")
 
 pl_theme4 =	theme_classic() +
@@ -3509,7 +3441,7 @@ pl_theme4 =	theme_classic() +
 FW <- ggplot(df_F, aes(x = cluster_lvl, y = ass_prob, fill = cluster)) +
   geom_boxplot()+
   stat_summary(fun=mean, geom="point", shape=18, size=5, color="red", fill="red")+
-  labs(title = "freshwater resident (N = 21)", x = "genotype", y = "Assignment probability (%)")+
+  labs(title = "Freshwater resident (N = 21)", x = "Genotype", y = "Assignment probability (%)")+
   ylim(0,1)+
   scale_fill_manual(values = c("#00BFB2", "#004643","#F1C40F", "#C5D86D"))+
   theme_bw()+
@@ -3518,7 +3450,7 @@ FW <- ggplot(df_F, aes(x = cluster_lvl, y = ass_prob, fill = cluster)) +
 Ana <- ggplot(df_A, aes(x = cluster_lvl, y = ass_prob, fill = cluster)) +
   geom_boxplot() +
   stat_summary(fun=mean, geom="point", shape=18, size=5, color="red", fill="red")+
-  labs(title = "anadromous (N = 13)", x = "Cluster", y = "Proportion") +
+  labs(title = "Anadromous (N = 13)", x = "Cluster", y = "Proportion") +
   ylim(0,1)+
   scale_fill_manual(values = c("#00BFB2", "#004643", "#F1C40F", "#C5D86D"))+
   theme_bw()+
@@ -3527,7 +3459,7 @@ Ana <- ggplot(df_A, aes(x = cluster_lvl, y = ass_prob, fill = cluster)) +
 Cross <- ggplot(df_T, aes(x = cluster_lvl, y = ass_prob, fill = cluster)) +
   geom_boxplot() +
   stat_summary(fun=mean, geom="point", shape=18, size=5, color="red", fill="red")+
-  labs(title = "cross-habitat (N = 28)", x = "genotye", y = "Assignment probability (%)") +
+  labs(title = "Cross-habitat (N = 28)", x = "Genotye", y = "Assignment probability (%)") +
   ylim(0,1)+
   scale_fill_manual(values = c("#00BFB2", "#004643", "#F1C40F", "#C5D86D"))+
   theme_bw()+
@@ -3536,7 +3468,7 @@ Cross <- ggplot(df_T, aes(x = cluster_lvl, y = ass_prob, fill = cluster)) +
 BW <- ggplot(df_B, aes(x = cluster_lvl, y = ass_prob, fill = cluster)) +
   geom_boxplot() +
   stat_summary(fun=mean, geom="point", shape=18, size=5, color="red", fill="red")+
-  labs(title = "brackish resident (N = 39)", x = "genotype", y = "Proportion") +
+  labs(title = "Brackish resident (N = 39)", x = "Genotype", y = "Proportion") +
   ylim(0,1)+
   scale_fill_manual(values = c("#00BFB2", "#004643", "#F1C40F", "#C5D86D"))+
   theme_bw()+
@@ -3545,11 +3477,10 @@ BW <- ggplot(df_B, aes(x = cluster_lvl, y = ass_prob, fill = cluster)) +
 allplot <- ggarrange(FW, Ana, Cross, BW)
   
 
-allplot2 <- annotate_figure(allplot, bottom = text_grob("putative genotype", color = "black", size = 15),
-                left = text_grob("assignment probability distribution", color = "black", size = 15, rot = 90, vjust = 2))
+allplot2 <- annotate_figure(allplot, bottom = text_grob("Putative genotype", color = "black", size = 15),
+                left = text_grob("Assignment probability distribution", color = "black", size = 15, rot = 90, vjust = 2))
 
-ggsave("Figures/MS/Ecotypes_genetic_clusters_k4.png", allplot2, 
-       width = 15, height = 15, units = "cm", dpi = 600, bg = "white")
+ggsave("Figures/MS/PDF/Fig8.pdf", allplot2, width = 15, height = 15, units = "cm", dpi = 600, bg = "white")
 ```
 
 ```{r phenotype-genotype matching figure hard-assigned genotypes, include=FALSE, eval=FALSE}
@@ -3557,25 +3488,24 @@ ggsave("Figures/MS/Ecotypes_genetic_clusters_k4.png", allplot2,
 rm(list = ls())
 
 #Load iscrete genotype data
-Genotype_discrete <- fread("Data/pike/genetics/discrete-cluster-assignment.csv")
+Genotype_discrete <- fread("Data/Pike/Genetics/discrete-cluster-assignment.csv")
 
 #Figure for hard assignments
 Hardclusts <- ggplot(Genotype_discrete, aes(hardclust, fill = phenotype))+geom_bar(position = "fill", width = 0.7)+theme_classic()+
   scale_x_discrete(breaks = c("2", "1", "3", "4", "U"), 
-                   labels=c("freshwater", "anadromous", "brackish 1", "brackish 2" ,"unknown"))+
+                   labels=c("Freshwater", "Anadromous", "Brackish 1", "Brackish 2" ,"Unknown"))+
   scale_y_continuous(breaks = seq(0,1,0.2), 
                      labels = c("0,0", "0,2", "0,4", "0,6", "0,8", "1,0"))+
   scale_fill_manual(breaks = c("Trans-habitat", "FW_resident", "Anadromous", "BW-resident"), 
-                    labels = c("cross-habitat", "anadromous", "freshwater resident", "brackish resident"),
+                    labels = c("Cross-habitat", "Anadromous", "Freshwater resident", "Brackish resident"),
                     values = c("#F1C40F", "#00BFB2", "#C5D86D", "#004643"))+
   theme(axis.line = element_line(size = .5, colour = "black", linetype = 1),
 		  axis.ticks = element_line(size = .5, colour = "black"),
 		  axis.text.y = element_text(size = 10, colour = "black"),
 		  axis.text.x = element_text(size = 10, colour = "black"),
 		  legend.text = element_text(size = 10))+
-  labs(x="genotype", y="proportion", fill="phenotype")
+  labs(x="Genotype", y="Proportion", fill="Phenotype")
 
-ggsave("Figures/supplement/phenotypes-genetic-clusters-k3_hard-assigned.png", Hardclusts, 
-       width = 15, height = 9, units = "cm", dpi = 600, bg = "white")
+ggsave("Figures/supplement/phenotypes-genetic-clusters-k4_hard-assigned.png", Hardclusts, width = 15, height = 9, units = "cm", dpi = 600, bg = "white")
 ```
 
