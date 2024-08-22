@@ -1730,34 +1730,34 @@ all_groups <- factor(c(unique(Newdata2$ecotype)))
 
 # Create ggplot with boxplots and custom position dodge 
 
-Agegrowth <- ggplot(Newdata2, aes(factor(lifeyear), prediction/1000, fill=ecotype), alpha=0.6)+
+Agegrowth <- ggplot(Newdata2, aes(factor(lifeyear), log(prediction), fill=ecotype), alpha=0.6)+
   geom_boxplot(lwd=.1, outlier.shape = NA, width=.7, position = position_dodge(width = NULL), color="black")+
-  labs(x="Age (years)", y=expression("predicted increment"~(mu*"m")),
-       color="ecotype")+
+  labs(x="Alter (Jahre)", y="Zuwachs (log-Skala)",
+       color="Verhaltenstyp", fill="Verhaltenstyp")+
   scale_x_discrete(limits=factor(c(1:11)),
                    breaks=c("1","2","3","4","5","6","7","8","9","10","11"))+
   scale_fill_manual(breaks = c("BW-resident","Anadromous","Trans-habitat","FW_resident"),
                     values = mypalette1,
-                    labels = c("brackish resident type", "anadromous type","cross-habitat type", "freshwater resident type"))+
+                    labels = c("Brackwasserresident", "Anadromer Typ","Übergangstyp", "Süßwasserresident"))+
   scale_fill_manual(breaks = c("BW-resident","Anadromous","Trans-habitat","FW_resident"),
                     values = mypalette1,
-                    labels = c("brackish resident type", "anadromous type","cross-habitat type", "freshwater resident type"))+
+                    labels = c("Brackwasserresident", "Anadromer Typ","Übergangstyp", "Süßwasserresident"))+
   theme_classic()+
   theme(panel.grid.major = element_line(),
-        legend.position = c(.6,.75),
+        legend.position = c(.71,.8),
         legend.background = element_blank(),
         legend.box.background = element_rect(),
         axis.line = element_line(size = 1, colour = "black", linetype = 1),
         axis.ticks = element_line(size = .5, colour = "black"),
-        axis.text.x = element_text(size = 18, colour = "black"),
-        axis.text.y = element_text(size = 18, color = "black"),
-        axis.title.x = element_blank(),
-        axis.title.y = element_blank(),
-        legend.text = element_text(size = 12, color = "black"),
-        legend.title = element_text(size = 15, color = "black"),
-        legend.key.size = unit(.5,"line"))
+        axis.text.x = element_text(size = 25, colour = "black"),
+        axis.text.y = element_text(size = 25, color = "black"),
+        axis.title.x = element_text(size = 25, colour = "black"),
+        axis.title.y = element_text(size = 25, colour = "black"),
+        legend.text = element_text(size = 25, color = "black"),
+        legend.title = element_text(size = 25, color = "black"),
+        legend.key.size = unit(1.5,"line"))
 
-ggsave("Figures/MS/Ecotype-age-specific-growth-large.png", Agegrowth, width = 8.8, height = 8, units = "cm", dpi = 600, bg = "white")
+ggsave("Figures/MS/Ecotype-age-specific-growth-large_GER.png", Agegrowth, width = 20, height = 15, units = "cm", dpi = 600, bg = "white")
 ```
 
 ## Lifelong growth
