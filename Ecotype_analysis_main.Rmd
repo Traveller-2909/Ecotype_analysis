@@ -308,7 +308,16 @@ max <- calc(raster, fun = max)
 range_absolute <- range$layer.2-range$layer.1
 
 #Write spatial rasters for QGIS or similar, change "Salinity_..." for env. variable that was interpolated
-writeRaster(raster, "Data/Spatial/Environment/Salinity_raster_05-22", format="GTiff", overwrite=T)
+writeRaster(raster, "Data/Environment/Salinity_raster_05-22", format="GTiff", overwrite=T)
+
+#load raster and prep for export
+Raster1 <- terra::rast("Data/environment/Salinity_mean_revised.tif")
+
+terra::gdal(drivers=T)
+
+writeRaster(Raster1, "Data/environment/Salinity_mean_revised2.tif",
+            overwrite=TRUE,filetype="GTiff",
+            gdal=c("COMPRESS=NONE", "TFW=YES"), datatype='FLT8S')
 ```
 
 # Life history phenotypes
@@ -2312,7 +2321,7 @@ abline(h = 5, lwd = 3, lty = 2, col="red")
 # of our model, as we aimed only at accounting for allometry, not evaluate the effect of age directly
 ```
 
-```{r test effects, echo=TRUE, eval=FALSE}
+```{r test effects, include=FALSE, echo=FALSE, eval=FALSE}
 rm(list = ls())
 
 #read in model data
@@ -2380,7 +2389,7 @@ anova(pikemodel.1.1, pikemodel.nosex)
 #sex is significant
 ```
 
-```{r age-specific model summary and table, out.width="120%", dpi=300, echo=FALSE, eval=FALSE, message=FALSE}
+```{r age-specific model summary and table, out.width="120%", dpi=300, include=FALSE, echo=FALSE, eval=FALSE, message=FALSE}
 rm(list = ls())
 
 #read in model data
@@ -2395,7 +2404,7 @@ r.squaredGLMM(pikemodel.final)
 tab_model(pikemodel.final, show.fstat = T, show.loglik = T, digits.re = 20, show.re.var = T)
 ```
 
-```{r age-specific model validation, echo=FALSE, eval=FALSE}
+```{r age-specific model validation, include=FALSE, echo=FALSE, eval=FALSE}
 rm(list = ls())
 
 #read in model data
@@ -2430,7 +2439,7 @@ plot(pikes$resid~pikes$Sr_mean, ylab = "Residuals", xlab = "Sr concentration")
 dev.off()
 ```
 
-```{r figures for abiotic main effects, eval=FALSE}
+```{r figures for abiotic main effects, include=FALSE, eval=FALSE}
 rm(list = ls())
 
 pikes <- fread("Data/Pike/Growth/Pikedata_model.csv")
@@ -2532,7 +2541,7 @@ Tempsal <- ggarrange(Temp, Sal, nrow = 1, labels = c("A", "B"), common.legend = 
 ggsave("Figures/MS/PDF/Fig5.pdf", Tempsal, width = 16, height = 9, units = "cm", dpi = 600, bg = "white")
 ```
 
-```{r figure for phenotye effect, eval=TRUE}
+```{r figure for phenotye effect, include=FALSE, eval=FALSE}
 rm(list = ls())
 
 pikes <- fread("Data/Pike/Growth/Pikedata_model.csv")
@@ -2594,7 +2603,7 @@ phenogrowth <- ggplot(Newdata2, aes(factor(lifeyear), prediction, fill=phenotype
 ggsave("Figures/MS/PDF/Fig6.pdf", phenogrowth, width = 16, height = 8, dpi = 600, bg = "white")
 ```
 
-```{r figure for genotype effect, eval=TRUE}
+```{r figure for genotype effect, eval=FALSE}
 rm(list = ls())
 
 pikes <- fread("Data/Pike/Growth/Pikedata_model.csv")
@@ -2863,7 +2872,7 @@ knitr::kable(tab)
 ```{r figure VB curves phenotype, include=FALSE, eval=FALSE}
 rm(list = ls())
 
-# Ectype codes: 1 = "Brackish resident"; 2 = "Freshwater resident"; 3 = "Anadromous"; 4 = "Cross-habitat"
+# Ecotype codes: 1 = "Brackish resident"; 2 = "Freshwater resident"; 3 = "Anadromous"; 4 = "Cross-habitat"
 fit_gamma_i <- readRDS("Data/Pike/Growth/fit_gamma_i_phenotype.rds")
 growthdata <- fread("Data/Pike/Growth/Pikedata_Stan.csv")
 
@@ -2932,7 +2941,7 @@ pl_curves = list()
 			geom_point(data = dat[dat$phenotype_num == i, ], 
 					   aes(x = lifeyear, y = rad_mm, group = ID), size = 1, alpha = .9, color="black") + 
 		  ylim(0,3.8)+scale_x_continuous(breaks = seq(1,15,1), labels = c("1","","3","","5","","7","","9","","11","","13","","15"))+
-			pl_theme + labs(x="Age", y="Otolith radius (um)")
+			pl_theme + labs(x="Age", y="Otolith radius (mm)")
 	}
 	pl_curves$nrow = 2
 	do.call(grid.arrange, pl_curves)
@@ -2944,7 +2953,7 @@ phenocurves2 <- ggarrange(phenocurves)
 
 phenocurves3 <- annotate_figure(phenocurves2, 
                               bottom = text_grob("Age (years)", rot = 0, size = 15), 
-                              left = text_grob(expression("Otolith radius"~(mu~"m")), rot = 90, size = 15))
+                              left = text_grob(expression("Otolith radius"~("mm")), rot = 90, size = 15))
 
 ggsave("Figures/MS/PDF/Fig7.pdf", phenocurves3, width = 15, height = 15, units = "cm", dpi = 600, bg = "white")
 ```
@@ -3028,7 +3037,7 @@ pl_curves = list()
 			geom_point(data = dat[dat$genotype_num == i, ], 
 					   aes(x = lifeyear, y = rad_mm, group = ID), size = 1, alpha = .9, color="black") + 
 		  ylim(0,3.8)+scale_x_continuous(breaks = seq(1,15,1), labels = c("1","","3","","5","","7","","9","","11","","13","","15"))+
-			pl_theme + labs(x="Age", y="otolith radius (um)")
+			pl_theme + labs(x="Age", y="otolith radius (mm)")
 	}
 	pl_curves$nrow = 2
 	do.call(grid.arrange, pl_curves)
@@ -3040,7 +3049,7 @@ genocurves2 <- ggarrange(genocurves)
 
 genocurves3 <- annotate_figure(genocurves2, 
                               bottom = text_grob("Age (years)", rot = 0, size = 15), 
-                              left = text_grob(expression("Otolith radius"~(mu~"m")), rot = 90, size = 15))
+                              left = text_grob(expression("Otolith radius"~("mm")), rot = 90, size = 15))
 
 ggsave("Figures/Supplement/Individual_growth_genotypes_revised.png", genocurves3, 
        width = 15, height = 15, units = "cm", dpi = 600, bg = "white")
@@ -3118,7 +3127,7 @@ pl_curves = list()
 			geom_point(data = dat[dat$ecotype_num == i, ], 
 					   aes(x = lifeyear, y = rad_mm, group = ID), size = 1, alpha = .9, color="black") + 
 		  ylim(0,3.8)+scale_x_continuous(breaks = seq(1,15,1), labels = c("1","","3","","5","","7","","9","","11","","13","","15"))+
-			pl_theme + labs(x="Age", y="otolith radius (um)")
+			pl_theme + labs(x="Age", y="otolith radius (mm)")
 	}
 	pl_curves$nrow = 2
 	do.call(grid.arrange, pl_curves)
@@ -3130,7 +3139,7 @@ ecocurves2 <- ggarrange(ecocurves)
 
 ecocurves3 <- annotate_figure(ecocurves2, 
                               bottom = text_grob("Age (years)", rot = 0, size = 15), 
-                              left = text_grob(expression("Otolith radius"~(mu~"m")), rot = 90, size = 15))
+                              left = text_grob(expression("Otolith radius"~("mm")), rot = 90, size = 15))
 
 ggsave("Figures/Supplement/Individual_growth_ecotypes-revised.png", ecocurves3, width = 15, height = 15, units = "cm", dpi = 600, bg = "white")
 ```
