@@ -3511,7 +3511,7 @@ Hardclusts <- ggplot(Genotype_discrete, aes(hardclust, fill = phenotype))+geom_b
   theme(axis.line = element_line(size = .5, colour = "black", linetype = 1),
 		  axis.ticks = element_line(size = .5, colour = "black"),
 		  axis.text.y = element_text(size = 10, colour = "black"),
-		  axis.text.x = element_text(size = 10, colour = "black"),
+		  axis.text.x = element_text(size = 10, colour = "black", angle = 90, vjust = .5),
 		  legend.text = element_text(size = 10))+
   labs(x="Genotype", y="Proportion", fill="Phenotype")
 
